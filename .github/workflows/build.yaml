@@ -1,0 +1,89 @@
+name: build-workflow
+
+on:
+  push:
+    tags:
+      - "*"
+  merge_group:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Set up Go 1.23
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.23"
+      - uses: taiki-e/install-action@just
+      - name: Install GoReleaser
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          version: '~> v2'
+          install-only: true
+      - name: Install nfpm
+        run: |
+          set -x
+          BIN_OS=$(uname -s)
+          BIN_ARCH=$(uname -m | sed 's/aarch64/arm64/g' | sed 's/amd64/x86_64/g')
+          PATTERN="nfpm_*_${BIN_OS}_${BIN_ARCH}.tar.gz"
+          mkdir -p "$HOME/.local/bin"
+          gh release download --pattern "$PATTERN" -R goreleaser/nfpm --output - | tar xvzf - -C "$HOME/.local/bin" nfpm
+          chmod a+x "$HOME/.local/bin/nfpm"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Set up Docker
+        uses: docker/setup-docker-action@v4
+        with:
+          # Used fixed docker version 24 due to compatibility problem with older versions
+          version: "v24.0.6"
+      - name: Set version
+        run: echo "RELEASE_VERSION=${GITHUB_REF#refs/*/}" >> $GITHUB_ENV
+      - run: just build
+        env:
+          SEMVER: ${{ env.RELEASE_VERSION }}
+      - run: just build-clients
+        env:
+          SEMVER: ${{ env.RELEASE_VERSION }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: artifacts
+          path: |
+            *.zip
+            *.deb
+            *.rpm
+
+  release:
+    runs-on: ubuntu-latest
+    needs: [build]
+    if: |
+      always() &&
+      startsWith(github.ref, 'refs/tags/') &&
+      needs.build.result == 'success'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Get artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: artifacts
+          path: dist
+      - name: Release
+        uses: softprops/action-gh-release@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          generate_release_notes: true
+          draft: true
+          files: |
+            dist/*.zip
+            dist/*.deb
+            dist/*.rpm

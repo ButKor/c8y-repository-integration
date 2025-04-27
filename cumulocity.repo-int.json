@@ -1,0 +1,49 @@
+{
+    "apiVersion": "v2",
+    "name": "c8y-repo-int",
+    "version": "0.0.1",
+    "provider": {
+      "name": "Korbinian Butz",
+      "domain": "https://cumulocity.com",
+      "support": "korbinian.butz@cumulocity.com"
+    },
+    "isolation": "MULTI_TENANT",
+    "scale": "AUTO",
+    "replicas": 1,
+    "requiredRoles": [
+      "ROLE_INVENTORY_READ",
+      "ROLE_INVENTORY_CREATE",
+      "ROLE_INVENTORY_ADMIN",
+      "ROLE_IDENTITY_READ",
+      "ROLE_IDENTITY_ADMIN",
+      "ROLE_USER_MANAGEMENT_READ",
+      "ROLE_AUDIT_READ",
+      "ROLE_AUDIT_ADMIN",
+      "ROLE_EVENT_READ",
+      "ROLE_EVENT_ADMIN",
+      "ROLE_TENANT_ADMIN",
+      "ROLE_OPTION_MANAGEMENT_READ"
+    ],
+    "roles": [],
+    "resources": {
+      "cpu": "0.5",
+      "memory": "256Mi"
+    },
+    "livenessProbe": {
+      "httpGet": {
+        "path": "/health",
+        "port": 80
+      },
+      "initialDelaySeconds": 30,
+      "periodSeconds": 120
+    },
+    "readinessProbe": {
+      "httpGet": {
+        "path": "/health",
+        "port": 80
+  
+      },
+      "initialDelaySeconds": 20,
+      "periodSeconds": 15
+    }
+  }
