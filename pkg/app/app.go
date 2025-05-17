@@ -2,7 +2,6 @@ package app
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log"
 	"log/slog"
@@ -18,16 +17,8 @@ import (
 	"github.com/kobu/repo-int/pkg/c8yauth"
 	"github.com/kobu/repo-int/pkg/handlers"
 	"github.com/labstack/echo/v4"
-	"github.com/reubenmiller/go-c8y/pkg/c8y"
 	"github.com/reubenmiller/go-c8y/pkg/microservice"
 	"go.uber.org/zap"
-)
-
-var Mode string
-
-const (
-	ModeEnroller   = "enrolment"
-	ModeSharedAuth = "sharedauth"
 )
 
 // App represents the http server and c8y microservice application
@@ -99,29 +90,6 @@ func NewApp() *App {
 	return app
 }
 
-func RequestRepositoryCredentials(ctx context.Context, client *c8y.Client) (aws.AwsCredentials, error) {
-	tenantOptionAccessId, _, _ := client.TenantOptions.GetOption(
-		ctx,
-		"firmware-repo1",
-		"credentials.aws-access-id",
-	)
-	tenantOptionAccessKey, _, _ := client.TenantOptions.GetOption(
-		ctx,
-		"firmware-repo",
-		"credentials.aws-access-key",
-	)
-	awsCreds := &aws.AwsCredentials{
-		AccessId:  tenantOptionAccessId.Value,
-		AccessKey: tenantOptionAccessKey.Value,
-	}
-
-	if awsCreds.AccessId == "" || awsCreds.AccessKey == "" {
-		return *awsCreds, errors.New("acccess id or key is null")
-	}
-
-	return *awsCreds, nil
-}
-
 // Run starts the microservice
 func (a *App) Run() {
 	application := a.c8ymicroservice
@@ -129,12 +97,34 @@ func (a *App) Run() {
 
 	slog.Info("Tenant Info", "tenant", application.Client.TenantName)
 
-	test, err := RequestRepositoryCredentials(application.WithServiceUser(application.Client.TenantName), application.Client)
-	if err != nil {
-		slog.Error("AWS Credentials were not found in tenant options. Make sure they are existing and your service has READ access to tenant option. Exiting now. ", "err", err)
-		os.Exit(1)
+	client := aws.NewClient(application.WithServiceUser(application.Client.TenantName), application.Client, "repo-integration-fw", "awsConnectionDetails")
+	client.ListBucketContent()
+	fmt.Println(client.GetFileContent("my-folder-1/my-third-software.txt"))
+	fmt.Println(client.GetPresignURL("my-folder-1/my-third-software.txt"))
+
+	tenantFwControllers := FirmwareTenantControllers{
+		tenantControllers: make([]FirmwareTenantController, 0),
 	}
-	slog.Info("Aws Credentials from tenant options", "credentials", test)
+	externalStorageObserver := ExternalStorageObserver{
+		awsClient:            client,
+		lastKnownHash:        "",
+		firmwareIndexEntries: make([]FirmwareIndexEntry, 0),
+		tenantControllers:    &tenantFwControllers,
+	}
+	fc := FirmwareTenantController{
+		tenantStore: &FirmwareTenantStore{
+			FirmwareByName:         make(map[string]FirmwareStoreFwEntry),
+			FirmwareVersionsByName: make(map[string][]FirmwareStoreVersionEntry),
+		},
+		ctx:       application.WithServiceUser(application.Client.TenantName),
+		c8yClient: application.Client,
+		awsClient: client,
+		tenantId:  application.Client.TenantName,
+	}
+	tenantFwControllers.Register(fc)
+	externalStorageObserver.SyncIndexFile()
+
+	fmt.Println(fc)
 
 	if a.echoServer == nil {
 		addr := ":" + application.Config.GetString("server.port")
@@ -186,7 +176,7 @@ func (a *App) setRouters() {
 	/*
 	 ** Routes
 	 */
-	handlers.RegisterCertificateHandlers(server)
+	handlers.RegisterHelloWorldHandler(server)
 
 	/*
 	 ** Health endpoints

@@ -1,6 +1,8 @@
 cmd/main/microservice_bootstrap.log
 cmd/main/application.log
 app.log
+configuration.json
+presigned-url.sample
 .env
 dist/
 *.zip
