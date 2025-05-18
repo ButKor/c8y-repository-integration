@@ -139,33 +139,14 @@ func (a *App) Run() {
 
 	// init Firmware Controllers
 	tenantFwControllers := FirmwareTenantControllers{
-		tenantControllers: make(map[string]FirmwareTenantController, 0),
+		tenantControllers: make(map[string]FirmwareTenantController),
 	}
 	// check registered tenants, create a Firmware Controller for each of them
 	syncSubscriptionsWithTenantControllers(application.Client, awsClient, &tenantFwControllers, serviceBaseUrl)
-	// read the index files from external storage and sync with Cumulocity Tenants
-	tenantFwControllers.SyncAllRegisteredTenantsWithIndexFiles()
 	// Start routine to periodically check for tenant subscriptions and add Firmware Controller for Each
 	go syncSubscriptionsWithTenantControllersPeriodically(application.Client, awsClient, &tenantFwControllers, serviceBaseUrl)
-
-	// create firmware tenant controller (for current tenant)
-	// fc := FirmwareTenantController{
-	// 	tenantStore: &FirmwareTenantStore{
-	// 		FirmwareByName:         make(map[string]FirmwareStoreFwEntry),
-	// 		FirmwareVersionsByName: make(map[string][]FirmwareStoreVersionEntry),
-	// 	},
-	// 	ctx:            application.WithServiceUser(application.Client.TenantName),
-	// 	c8yClient:      application.Client,
-	// 	awsClient:      awsClient,
-	// 	tenantId:       application.Client.TenantName,
-	// 	serviceBaseUrl: serviceBaseUrl,
-	// }
-	// // add tenant controller to controllers list
-	// tenantFwControllers := FirmwareTenantControllers{
-	// 	tenantControllers: make(map[string]FirmwareTenantController, 0),
-	// }
-	// tenantFwControllers.Register(fc)
-	// create external Storage observer (pass tenant controllers + aws Client)
+	// let firmware controller observe external storage
+	go tenantFwControllers.AutoObserve(45)
 
 	// now start webserver
 	if a.echoServer == nil {

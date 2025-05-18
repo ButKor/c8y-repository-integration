@@ -1,12 +1,15 @@
 package app
 
 import (
+	"crypto/md5"
+	"encoding/hex"
 	"encoding/json"
 	"log/slog"
 	"maps"
 	"os"
 	"slices"
 	"strings"
+	"time"
 )
 
 type ExtFirmwareInfoEntry struct {
@@ -22,7 +25,8 @@ type ExtFirmwareVersionEntry struct {
 }
 
 type FirmwareTenantControllers struct {
-	tenantControllers map[string]FirmwareTenantController
+	tenantControllers  map[string]FirmwareTenantController
+	lastKnownInputHash string
 }
 
 func (c *FirmwareTenantControllers) Register(fc FirmwareTenantController) {
@@ -37,14 +41,34 @@ func (c *FirmwareTenantControllers) Get(tenantId string) (FirmwareTenantControll
 	return val, ok
 }
 
+func (c *FirmwareTenantControllers) AutoObserve(intervalSecs int) {
+	go func() {
+		for {
+			c.SyncAllRegisteredTenantsWithIndexFiles()
+			time.Sleep(time.Duration(intervalSecs) * time.Second)
+		}
+	}()
+}
+
 func (c *FirmwareTenantControllers) SyncAllRegisteredTenantsWithIndexFiles() {
 	c.SyncTenantsWithIndexFiles(slices.Collect(maps.Keys(c.tenantControllers)))
 }
 
 func (c *FirmwareTenantControllers) SyncTenantsWithIndexFiles(tenantIds []string) {
-	// TODO: error and null check
-	fwVersionEntries := ReadExtFwVersionContents()
-	fwInfoEntries := ReadFirmwareInfoContents()
+	contentFwVersionFile := ReadExtFileContentsAsString("c8y-firmware-versions.json")
+	contentFwInfoFile := ReadExtFileContentsAsString("c8y-firmware-info.json")
+	inputHash := GetMD5Hash(contentFwVersionFile) + GetMD5Hash(contentFwVersionFile)
+
+	if inputHash == c.lastKnownInputHash {
+		slog.Info("No change in input files, nothing to do here.", "inputHash", inputHash, "lastKnownHash", c.lastKnownInputHash)
+		return
+	}
+
+	slog.Info("Hashes for Input Files differing between current run and last run. Parsing the external files now")
+	fwVersionEntries := ParseExtFwVersionContents(contentFwVersionFile)
+	fwInfoEntries := ParseExtFwInfoContents(contentFwInfoFile)
+
+	slog.Info("Now apply changes in each tenant")
 	for _, e := range tenantIds {
 		val, ok := c.tenantControllers[e]
 		if !ok {
@@ -53,16 +77,21 @@ func (c *FirmwareTenantControllers) SyncTenantsWithIndexFiles(tenantIds []string
 		}
 		val.ExternalStorageIndexChanged(fwVersionEntries, fwInfoEntries)
 	}
+	c.lastKnownInputHash = inputHash
+}
+
+func ReadExtFileContentsAsString(objectKey string) string {
+	res, _ := os.ReadFile(objectKey)
+	return string(res)
+	// fc, _ := o.awsClient.GetFileContent("firmware-index.json")
+	// return fc
 }
 
 // input = content of the index file located on external storage
 // return = [List of parsed FimrwareIndexEntries] , [Hash of input string]
-func ReadExtFwVersionContents() []ExtFirmwareVersionEntry {
-	fc, _ := os.ReadFile("c8y-firmware-versions.json")
-	// fc, _ := o.awsClient.GetFileContent("firmware-index.json")
-	// return fc
+func ParseExtFwVersionContents(fileContentFwVersionFile string) []ExtFirmwareVersionEntry {
 	var indexEntries []ExtFirmwareVersionEntry
-	for _, e := range strings.Split(string(fc), "\n") {
+	for _, e := range strings.Split(string(fileContentFwVersionFile), "\n") {
 		data := ExtFirmwareVersionEntry{}
 		err := json.Unmarshal([]byte(e), &data)
 		if err != nil {
@@ -74,12 +103,12 @@ func ReadExtFwVersionContents() []ExtFirmwareVersionEntry {
 	return indexEntries
 }
 
-func ReadFirmwareInfoContents() map[string]ExtFirmwareInfoEntry {
-	fc, _ := os.ReadFile("c8y-firmware-info.json")
-	// fc, _ := o.awsClient.GetFileContent("firmware-index.json")
-	// return fc
+func ParseExtFwInfoContents(fileContentFwInfoFile string) map[string]ExtFirmwareInfoEntry {
 	res := make(map[string]ExtFirmwareInfoEntry)
-	for _, e := range strings.Split(string(fc), "\n") {
+	for _, e := range strings.Split(string(fileContentFwInfoFile), "\n") {
+		if strings.HasPrefix("#", e) || len(e) == 0 {
+			continue
+		}
 		data := ExtFirmwareInfoEntry{}
 		err := json.Unmarshal([]byte(e), &data)
 		if err != nil {
@@ -89,4 +118,10 @@ func ReadFirmwareInfoContents() map[string]ExtFirmwareInfoEntry {
 		res[data.Name] = data
 	}
 	return res
+}
+
+func GetMD5Hash(text string) string {
+	hasher := md5.New()
+	hasher.Write([]byte(text))
+	return hex.EncodeToString(hasher.Sum(nil))
 }
