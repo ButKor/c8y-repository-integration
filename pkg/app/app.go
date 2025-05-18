@@ -91,7 +91,7 @@ func NewApp() *App {
 	return app
 }
 
-func checkSubscriptions(c *c8y.Client, awsClient *aws.AWSClient, fwControllers *FirmwareTenantControllers, serviceBaseUrl string) {
+func syncSubscriptionsWithTenantControllers(c *c8y.Client, awsClient *aws.AWSClient, fwControllers *FirmwareTenantControllers, serviceBaseUrl string) {
 	// TODO error handling
 	subscriptions, _, _ := c.Application.GetCurrentApplicationSubscriptions(c.Context.BootstrapUserFromEnvironment())
 	for _, user := range subscriptions.Users {
@@ -111,14 +111,15 @@ func checkSubscriptions(c *c8y.Client, awsClient *aws.AWSClient, fwControllers *
 				serviceBaseUrl: serviceBaseUrl,
 			}
 			fwControllers.Register(fc)
+			fwControllers.SyncTenantsWithIndexFiles([]string{tenant})
 		}
 		slog.Info("Controller already existing for tenant", "tenant", tenant)
 	}
 }
 
-func checkSubscriptionsPeriodically(c *c8y.Client, awsClient *aws.AWSClient, fwControllers *FirmwareTenantControllers, serviceBaseUrl string) {
+func syncSubscriptionsWithTenantControllersPeriodically(c *c8y.Client, awsClient *aws.AWSClient, fwControllers *FirmwareTenantControllers, serviceBaseUrl string) {
 	for {
-		checkSubscriptions(c, awsClient, fwControllers, serviceBaseUrl)
+		syncSubscriptionsWithTenantControllers(c, awsClient, fwControllers, serviceBaseUrl)
 		time.Sleep(30 * time.Second)
 	}
 }
@@ -140,20 +141,12 @@ func (a *App) Run() {
 	tenantFwControllers := FirmwareTenantControllers{
 		tenantControllers: make(map[string]FirmwareTenantController, 0),
 	}
+	// check registered tenants, create a Firmware Controller for each of them
+	syncSubscriptionsWithTenantControllers(application.Client, awsClient, &tenantFwControllers, serviceBaseUrl)
+	// read the index files from external storage and sync with Cumulocity Tenants
+	tenantFwControllers.SyncAllRegisteredTenantsWithIndexFiles()
 	// Start routine to periodically check for tenant subscriptions and add Firmware Controller for Each
-	checkSubscriptions(application.Client, awsClient, &tenantFwControllers, serviceBaseUrl)
-
-	// Initialize External Storage Observer
-	// listening to File Changes on External Storage and notifying controllers once detected
-	externalStorageObserver := ExternalStorageObserver{
-		awsClient:             awsClient,
-		lastKnownHashVersions: "",
-		firmwareIndexEntries:  make([]ExtFirmwareVersionEntry, 0),
-		tenantControllers:     &tenantFwControllers,
-	}
-	go externalStorageObserver.SyncFirmwareVersionsFile()
-
-	go checkSubscriptionsPeriodically(application.Client, awsClient, &tenantFwControllers, serviceBaseUrl)
+	go syncSubscriptionsWithTenantControllersPeriodically(application.Client, awsClient, &tenantFwControllers, serviceBaseUrl)
 
 	// create firmware tenant controller (for current tenant)
 	// fc := FirmwareTenantController{
