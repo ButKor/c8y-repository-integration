@@ -1,18 +1,18 @@
 package app
 
 type FirmwareTenantControllers struct {
-	tenantControllers []FirmwareTenantController
+	tenantControllers map[string]FirmwareTenantController
 }
 
 func (c *FirmwareTenantControllers) Register(fc FirmwareTenantController) {
 	if c.tenantControllers == nil {
-		c.tenantControllers = make([]FirmwareTenantController, 1)
+		c.tenantControllers = make(map[string]FirmwareTenantController, 1)
 	}
-	c.tenantControllers = append(c.tenantControllers, fc)
+	c.tenantControllers[fc.tenantId] = fc
 }
 
-func (c *FirmwareTenantControllers) NotifyExtIndexChanged(indexEntries []FirmwareIndexEntry) {
+func (c *FirmwareTenantControllers) NotifyExtIndexChanged(extFwVersionEntries []ExtFirmwareVersionEntry, extFwInfoEntries map[string]ExtFirmwareInfoEntry) {
 	for _, e := range c.tenantControllers {
-		e.ExternalStorageIndexChanged(indexEntries)
+		e.ExternalStorageIndexChanged(extFwVersionEntries, extFwInfoEntries)
 	}
 }

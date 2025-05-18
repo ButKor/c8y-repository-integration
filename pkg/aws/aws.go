@@ -59,6 +59,10 @@ func NewClient(ctx context.Context, client *c8y.Client, tenantOptionCategory str
 	}
 }
 
+func (awsClient AWSClient) GetBucketName() string {
+	return awsClient.connectionDetails.BucketName
+}
+
 func (awsClient AWSClient) ListBucketContent() {
 	output, err := awsClient.s3Client.ListObjectsV2(context.TODO(), &s3.ListObjectsV2Input{
 		Bucket: aws.String(awsClient.connectionDetails.BucketName),
@@ -72,17 +76,17 @@ func (awsClient AWSClient) ListBucketContent() {
 	}
 }
 
-func (awsClient AWSClient) GetPresignURL(awsObjectKey string) string {
+func (awsClient AWSClient) GetPresignURL(awsObjectKey string) (string, error) {
 	presignedUrl, err := awsClient.s3PresignClient.PresignGetObject(context.Background(),
 		&s3.GetObjectInput{
 			Bucket: aws.String(awsClient.connectionDetails.BucketName),
 			Key:    aws.String(awsObjectKey),
 		},
-		s3.WithPresignExpires(time.Minute*15))
+		s3.WithPresignExpires(time.Minute*60))
 	if err != nil {
-		log.Fatal(err)
+		return "", err
 	}
-	return presignedUrl.URL
+	return presignedUrl.URL, err
 }
 
 func (awsClient AWSClient) GetFileContent(awsObjectKey string) (string, error) {

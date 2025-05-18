@@ -17,6 +17,7 @@ import (
 	"github.com/kobu/repo-int/pkg/c8yauth"
 	"github.com/kobu/repo-int/pkg/handlers"
 	"github.com/labstack/echo/v4"
+	"github.com/reubenmiller/go-c8y/pkg/c8y"
 	"github.com/reubenmiller/go-c8y/pkg/microservice"
 	"go.uber.org/zap"
 )
@@ -90,42 +91,56 @@ func NewApp() *App {
 	return app
 }
 
+func checkSubscriptions(c *c8y.Client) {
+	for {
+		as, _, _ := c.Application.GetCurrentApplicationSubscriptions(c.Context.BootstrapUserFromEnvironment())
+		slog.Info("Registered Services: ", "users", as.Users)
+		time.Sleep(10 * time.Second)
+	}
+}
+
 // Run starts the microservice
 func (a *App) Run() {
 	application := a.c8ymicroservice
 	application.Scheduler.Start()
 
 	slog.Info("Tenant Info", "tenant", application.Client.TenantName)
+	bUrl := application.Client.BaseURL
+	serviceBaseUrl := bUrl.Scheme + "://" + bUrl.Hostname() + "/service/" + application.Application.ContextPath
+	slog.Info("Service BaseURL", "url", serviceBaseUrl)
 
-	client := aws.NewClient(application.WithServiceUser(application.Client.TenantName), application.Client, "repo-integration-fw", "awsConnectionDetails")
-	client.ListBucketContent()
-	fmt.Println(client.GetFileContent("my-folder-1/my-third-software.txt"))
-	fmt.Println(client.GetPresignURL("my-folder-1/my-third-software.txt"))
+	go checkSubscriptions(application.Client)
 
-	tenantFwControllers := FirmwareTenantControllers{
-		tenantControllers: make([]FirmwareTenantController, 0),
-	}
-	externalStorageObserver := ExternalStorageObserver{
-		awsClient:            client,
-		lastKnownHash:        "",
-		firmwareIndexEntries: make([]FirmwareIndexEntry, 0),
-		tenantControllers:    &tenantFwControllers,
-	}
+	// create AWS Client
+	awsClient := aws.NewClient(application.WithServiceUser(application.Client.TenantName), application.Client, "repo-integration-fw", "awsConnectionDetails")
+
+	// create firmware tenant controller (for current tenant)
 	fc := FirmwareTenantController{
 		tenantStore: &FirmwareTenantStore{
 			FirmwareByName:         make(map[string]FirmwareStoreFwEntry),
 			FirmwareVersionsByName: make(map[string][]FirmwareStoreVersionEntry),
 		},
-		ctx:       application.WithServiceUser(application.Client.TenantName),
-		c8yClient: application.Client,
-		awsClient: client,
-		tenantId:  application.Client.TenantName,
+		ctx:            application.WithServiceUser(application.Client.TenantName),
+		c8yClient:      application.Client,
+		awsClient:      awsClient,
+		tenantId:       application.Client.TenantName,
+		serviceBaseUrl: serviceBaseUrl,
+	}
+	// add tenant controller to controllers list
+	tenantFwControllers := FirmwareTenantControllers{
+		tenantControllers: make(map[string]FirmwareTenantController, 0),
 	}
 	tenantFwControllers.Register(fc)
-	externalStorageObserver.SyncIndexFile()
+	// create external Storage observer (pass tenant controllers + aws Client)
+	externalStorageObserver := ExternalStorageObserver{
+		awsClient:             awsClient,
+		lastKnownHashVersions: "",
+		firmwareIndexEntries:  make([]ExtFirmwareVersionEntry, 0),
+		tenantControllers:     &tenantFwControllers,
+	}
+	externalStorageObserver.SyncFirmwareVersionsFile()
 
-	fmt.Println(fc)
-
+	// now start webserver
 	if a.echoServer == nil {
 		addr := ":" + application.Config.GetString("server.port")
 		zap.S().Infof("starting http server on %s", addr)
@@ -136,7 +151,7 @@ func (a *App) Run() {
 		a.echoServer.Use(c8yauth.AuthenticationBasic(provider))
 		a.echoServer.Use(c8yauth.AuthenticationBearer(provider))
 
-		a.setRouters()
+		a.setRouters(awsClient)
 
 		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 		defer stop()
@@ -169,17 +184,8 @@ func setDefaultContextHandler(e *echo.Echo, c8yms *microservice.Microservice) {
 		}
 	})
 }
-
-func (a *App) setRouters() {
+func (a *App) setRouters(awsClient *aws.AWSClient) {
 	server := a.echoServer
-
-	/*
-	 ** Routes
-	 */
-	handlers.RegisterHelloWorldHandler(server)
-
-	/*
-	 ** Health endpoints
-	 */
+	handlers.RegisterFirmwareHandler(server, awsClient)
 	a.c8ymicroservice.AddHealthEndpointHandlers(server)
 }
