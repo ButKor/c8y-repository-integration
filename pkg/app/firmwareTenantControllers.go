@@ -11,6 +11,11 @@ func (c *FirmwareTenantControllers) Register(fc FirmwareTenantController) {
 	c.tenantControllers[fc.tenantId] = fc
 }
 
+func (c *FirmwareTenantControllers) Get(tenantId string) (FirmwareTenantController, bool) {
+	val, ok := c.tenantControllers[tenantId]
+	return val, ok
+}
+
 func (c *FirmwareTenantControllers) NotifyExtIndexChanged(extFwVersionEntries []ExtFirmwareVersionEntry, extFwInfoEntries map[string]ExtFirmwareInfoEntry) {
 	for _, e := range c.tenantControllers {
 		e.ExternalStorageIndexChanged(extFwVersionEntries, extFwInfoEntries)

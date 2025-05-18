@@ -91,11 +91,35 @@ func NewApp() *App {
 	return app
 }
 
-func checkSubscriptions(c *c8y.Client) {
+func checkSubscriptions(c *c8y.Client, awsClient *aws.AWSClient, fwControllers *FirmwareTenantControllers, serviceBaseUrl string) {
+	// TODO error handling
+	subscriptions, _, _ := c.Application.GetCurrentApplicationSubscriptions(c.Context.BootstrapUserFromEnvironment())
+	for _, user := range subscriptions.Users {
+		tenant := user.Tenant
+		_, exists := fwControllers.Get(tenant)
+		// firmware controller for tenant does not exist, create and register it
+		if !exists {
+			fc := FirmwareTenantController{
+				tenantStore: &FirmwareTenantStore{
+					FirmwareByName:         make(map[string]FirmwareStoreFwEntry),
+					FirmwareVersionsByName: make(map[string][]FirmwareStoreVersionEntry),
+				},
+				ctx:            c.Context.ServiceUserContext(tenant, false),
+				c8yClient:      c,
+				awsClient:      awsClient,
+				tenantId:       tenant,
+				serviceBaseUrl: serviceBaseUrl,
+			}
+			fwControllers.Register(fc)
+		}
+		slog.Info("Controller already existing for tenant", "tenant", tenant)
+	}
+}
+
+func checkSubscriptionsPeriodically(c *c8y.Client, awsClient *aws.AWSClient, fwControllers *FirmwareTenantControllers, serviceBaseUrl string) {
 	for {
-		as, _, _ := c.Application.GetCurrentApplicationSubscriptions(c.Context.BootstrapUserFromEnvironment())
-		slog.Info("Registered Services: ", "users", as.Users)
-		time.Sleep(10 * time.Second)
+		checkSubscriptions(c, awsClient, fwControllers, serviceBaseUrl)
+		time.Sleep(30 * time.Second)
 	}
 }
 
@@ -109,36 +133,46 @@ func (a *App) Run() {
 	serviceBaseUrl := bUrl.Scheme + "://" + bUrl.Hostname() + "/service/" + application.Application.ContextPath
 	slog.Info("Service BaseURL", "url", serviceBaseUrl)
 
-	go checkSubscriptions(application.Client)
-
 	// create AWS Client
 	awsClient := aws.NewClient(application.WithServiceUser(application.Client.TenantName), application.Client, "repo-integration-fw", "awsConnectionDetails")
 
-	// create firmware tenant controller (for current tenant)
-	fc := FirmwareTenantController{
-		tenantStore: &FirmwareTenantStore{
-			FirmwareByName:         make(map[string]FirmwareStoreFwEntry),
-			FirmwareVersionsByName: make(map[string][]FirmwareStoreVersionEntry),
-		},
-		ctx:            application.WithServiceUser(application.Client.TenantName),
-		c8yClient:      application.Client,
-		awsClient:      awsClient,
-		tenantId:       application.Client.TenantName,
-		serviceBaseUrl: serviceBaseUrl,
-	}
-	// add tenant controller to controllers list
+	// init Firmware Controllers
 	tenantFwControllers := FirmwareTenantControllers{
 		tenantControllers: make(map[string]FirmwareTenantController, 0),
 	}
-	tenantFwControllers.Register(fc)
-	// create external Storage observer (pass tenant controllers + aws Client)
+	// Start routine to periodically check for tenant subscriptions and add Firmware Controller for Each
+	checkSubscriptions(application.Client, awsClient, &tenantFwControllers, serviceBaseUrl)
+
+	// Initialize External Storage Observer
+	// listening to File Changes on External Storage and notifying controllers once detected
 	externalStorageObserver := ExternalStorageObserver{
 		awsClient:             awsClient,
 		lastKnownHashVersions: "",
 		firmwareIndexEntries:  make([]ExtFirmwareVersionEntry, 0),
 		tenantControllers:     &tenantFwControllers,
 	}
-	externalStorageObserver.SyncFirmwareVersionsFile()
+	go externalStorageObserver.SyncFirmwareVersionsFile()
+
+	go checkSubscriptionsPeriodically(application.Client, awsClient, &tenantFwControllers, serviceBaseUrl)
+
+	// create firmware tenant controller (for current tenant)
+	// fc := FirmwareTenantController{
+	// 	tenantStore: &FirmwareTenantStore{
+	// 		FirmwareByName:         make(map[string]FirmwareStoreFwEntry),
+	// 		FirmwareVersionsByName: make(map[string][]FirmwareStoreVersionEntry),
+	// 	},
+	// 	ctx:            application.WithServiceUser(application.Client.TenantName),
+	// 	c8yClient:      application.Client,
+	// 	awsClient:      awsClient,
+	// 	tenantId:       application.Client.TenantName,
+	// 	serviceBaseUrl: serviceBaseUrl,
+	// }
+	// // add tenant controller to controllers list
+	// tenantFwControllers := FirmwareTenantControllers{
+	// 	tenantControllers: make(map[string]FirmwareTenantController, 0),
+	// }
+	// tenantFwControllers.Register(fc)
+	// create external Storage observer (pass tenant controllers + aws Client)
 
 	// now start webserver
 	if a.echoServer == nil {
