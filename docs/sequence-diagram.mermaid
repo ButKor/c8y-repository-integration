@@ -1,18 +1,3 @@
-# Attention / Disclaimer
-
-This repository is **work in progress**. It is not ready to use yet. 
-
-# About
-
-A repository to integrate the Cumulocity Firmware Repository with an AWS storage account. The service supports:
-
-* Discovering firmware images stored in an S3 bucket. These images will be synchronized with Cumulocitys Firmware Repositories. It does *not* copy the actual Files to the Cumulocity repository, it works with URLs instead. 
-
-* It exposes an endpoint to download the firmware images. 
-
-See below sequence diagram for details:
-
-```mermaid
 sequenceDiagram
     autonumber
     actor User
@@ -42,5 +27,3 @@ sequenceDiagram
     Note over D,IS: End Download Phase
     D -->> D: Apply Firmware Update
     D -->> CC: Log success/failure of firmware update
-```
-

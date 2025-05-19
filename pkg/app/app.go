@@ -92,35 +92,39 @@ func NewApp() *App {
 }
 
 func syncSubscriptionsWithTenantControllers(c *c8y.Client, awsClient *aws.AWSClient, fwControllers *FirmwareTenantControllers, serviceBaseUrl string) {
-	// TODO error handling
 	subscriptions, _, _ := c.Application.GetCurrentApplicationSubscriptions(c.Context.BootstrapUserFromEnvironment())
 	for _, user := range subscriptions.Users {
 		tenant := user.Tenant
-		_, exists := fwControllers.Get(tenant)
-		// firmware controller for tenant does not exist, create and register it
-		if !exists {
-			fc := FirmwareTenantController{
-				tenantStore: &FirmwareTenantStore{
-					FirmwareByName:         make(map[string]FirmwareStoreFwEntry),
-					FirmwareVersionsByName: make(map[string][]FirmwareStoreVersionEntry),
-				},
-				ctx:            c.Context.ServiceUserContext(tenant, false),
-				c8yClient:      c,
-				awsClient:      awsClient,
-				tenantId:       tenant,
-				serviceBaseUrl: serviceBaseUrl,
-			}
-			fwControllers.Register(fc)
-			fwControllers.SyncTenantsWithIndexFiles([]string{tenant})
+		if len(tenant) == 0 {
+			slog.Warn("No tenant for for subscription user")
+			continue
 		}
-		slog.Info("Controller already existing for tenant", "tenant", tenant)
+		_, exists := fwControllers.Get(tenant)
+		if exists {
+			slog.Info("Controller already existing for tenant", "tenant", tenant)
+			continue
+		}
+		// firmware controller for tenant does not exist, create and register it
+		fc := FirmwareTenantController{
+			tenantStore: &FirmwareTenantStore{
+				FirmwareByName:         make(map[string]FirmwareStoreFwEntry),
+				FirmwareVersionsByName: make(map[string][]FirmwareStoreVersionEntry),
+			},
+			ctx:            c.Context.ServiceUserContext(tenant, false),
+			c8yClient:      c,
+			awsClient:      awsClient,
+			tenantId:       tenant,
+			serviceBaseUrl: serviceBaseUrl,
+		}
+		fwControllers.Register(fc)
+		fwControllers.SyncTenantsWithIndexFiles([]string{tenant})
 	}
 }
 
 func syncSubscriptionsWithTenantControllersPeriodically(c *c8y.Client, awsClient *aws.AWSClient, fwControllers *FirmwareTenantControllers, serviceBaseUrl string) {
 	for {
 		syncSubscriptionsWithTenantControllers(c, awsClient, fwControllers, serviceBaseUrl)
-		time.Sleep(30 * time.Second)
+		time.Sleep(60 * time.Second)
 	}
 }
 

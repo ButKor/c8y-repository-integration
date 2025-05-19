@@ -73,7 +73,6 @@ func AuthenticationBasic(authProvider *AuthenticationProvider) echo.MiddlewareFu
 			if tenant, username, found := strings.Cut(parts[0], "/"); found {
 				ctx = NewBasicAuthorizationContext(tenant, username, parts[1])
 			} else {
-				// TODO: Should the tenant name be provided by the application?
 				ctx = NewBasicAuthorizationContext("", parts[0], parts[1])
 			}
 			sc, ok := authProvider.Authorize(ctx)
