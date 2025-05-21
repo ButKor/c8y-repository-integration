@@ -95,7 +95,7 @@ func DownloadFileViaRedirect(c echo.Context) error {
 	if statusCode != http.StatusOK {
 		return c.JSON(statusCode, content)
 	}
-	return c.Redirect(http.StatusPermanentRedirect, presignedUrl)
+	return c.Redirect(http.StatusTemporaryRedirect, presignedUrl)
 }
 
 func GetPresignedUrl(c echo.Context) error {
