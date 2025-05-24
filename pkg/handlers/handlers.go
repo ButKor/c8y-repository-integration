@@ -4,21 +4,18 @@ import (
 	"context"
 	"log/slog"
 	"net/http"
-	"strconv"
-	"time"
 
 	"github.com/kobu/repo-int/internal/model"
-	"github.com/kobu/repo-int/pkg/aws"
 	"github.com/kobu/repo-int/pkg/c8yauth"
+	est "github.com/kobu/repo-int/pkg/externalstorage"
 	"github.com/labstack/echo/v4"
 	"github.com/reubenmiller/go-c8y/pkg/c8y"
 )
 
-var awsClient *aws.AWSClient
+var estClient *est.ExternalStorageClient
 
-func RegisterFirmwareHandler(e *echo.Echo, aClient *aws.AWSClient) {
-	awsClient = aClient
-	e.Add("GET", "firmware/getPresignedUrl", GetPresignedUrl, c8yauth.Authorization(c8yauth.RoleDevice))
+func RegisterFirmwareHandler(e *echo.Echo, eClient *est.ExternalStorageClient) {
+	estClient = eClient
 	e.Add("GET", "firmware/download", DownloadFileViaRedirect, c8yauth.Authorization(c8yauth.RoleDevice))
 }
 
@@ -29,6 +26,31 @@ type ErrorMessage struct {
 
 func (e *ErrorMessage) Error() string {
 	return e.Err
+}
+
+func DownloadFileViaRedirect(c echo.Context) error {
+	cc := c.(*model.RequestContext)
+
+	auth, err := c8yauth.GetUserSecurityContext(c)
+	if err != nil {
+		return c.JSON(http.StatusForbidden, ErrorMessage{
+			Err:    "invalid user context",
+			Reason: err.Error(),
+		})
+	}
+
+	id := c.QueryParam("id")
+	if len(id) == 0 {
+		return c.JSON(http.StatusUnprocessableEntity, map[string]any{
+			"status":  http.StatusUnprocessableEntity,
+			"message": "Missing 'id' parameter in request",
+		})
+	}
+	presignedUrl, statusCode, content := GeneratePresignedUrl(cc.Microservice.WithServiceUser(auth.Tenant), cc.Microservice.Client, id)
+	if statusCode != http.StatusOK {
+		return c.JSON(statusCode, content)
+	}
+	return c.Redirect(http.StatusTemporaryRedirect, presignedUrl)
 }
 
 func GeneratePresignedUrl(ctx context.Context, c8yClient *c8y.Client, moid string) (string, int, map[string]any) {
@@ -59,7 +81,7 @@ func GeneratePresignedUrl(ctx context.Context, c8yClient *c8y.Client, moid strin
 		}
 	}
 	// generate presigned URL
-	presignedUrl, err := awsClient.GetPresignURL(objectKey)
+	presignedUrl, err := (*estClient).GetPresignURL(objectKey)
 	if err != nil {
 		slog.Error("Error while generating presigned URL for objectKey", "objectKey", objectKey, "err", err.Error())
 		return "", http.StatusInternalServerError, map[string]any{
@@ -71,64 +93,4 @@ func GeneratePresignedUrl(ctx context.Context, c8yClient *c8y.Client, moid strin
 	return presignedUrl, http.StatusOK, map[string]any{
 		"url": presignedUrl,
 	}
-}
-
-func DownloadFileViaRedirect(c echo.Context) error {
-	cc := c.(*model.RequestContext)
-
-	auth, err := c8yauth.GetUserSecurityContext(c)
-	if err != nil {
-		return c.JSON(http.StatusForbidden, ErrorMessage{
-			Err:    "invalid user context",
-			Reason: err.Error(),
-		})
-	}
-
-	// validate parameters
-	id := c.QueryParam("id")
-	if len(id) == 0 {
-		return c.JSON(http.StatusUnprocessableEntity, map[string]any{
-			"status":  http.StatusUnprocessableEntity,
-			"message": "Missing 'id' parameter in request",
-		})
-	}
-	v := c.QueryParam("sleep")
-	i, _ := strconv.Atoi(v)
-	duration := time.Second * time.Duration(i)
-	time.Sleep(duration)
-	// generated presigned url and check result
-	presignedUrl, statusCode, content := GeneratePresignedUrl(cc.Microservice.WithServiceUser(auth.Tenant), cc.Microservice.Client, id)
-	if statusCode != http.StatusOK {
-		return c.JSON(statusCode, content)
-	}
-	return c.Redirect(http.StatusTemporaryRedirect, presignedUrl)
-}
-
-func GetPresignedUrl(c echo.Context) error {
-	cc := c.(*model.RequestContext)
-
-	auth, err := c8yauth.GetUserSecurityContext(c)
-	if err != nil {
-		return c.JSON(http.StatusForbidden, ErrorMessage{
-			Err:    "invalid user context",
-			Reason: err.Error(),
-		})
-	}
-
-	// validate parameters
-	id := c.QueryParam("id")
-	if len(id) == 0 {
-		return c.JSON(http.StatusUnprocessableEntity, map[string]any{
-			"status":  http.StatusUnprocessableEntity,
-			"message": "Missing 'id' parameter in request",
-		})
-	}
-	// generated presigned url and check result
-	presignedUrl, statusCode, content := GeneratePresignedUrl(cc.Microservice.WithServiceUser(auth.Tenant), cc.Microservice.Client, id)
-	if statusCode != http.StatusOK {
-		return c.JSON(statusCode, content)
-	}
-	return c.JSON(http.StatusOK, map[string]any{
-		"url": presignedUrl,
-	})
 }

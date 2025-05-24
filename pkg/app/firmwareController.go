@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 
-	"github.com/kobu/repo-int/pkg/aws"
+	est "github.com/kobu/repo-int/pkg/externalstorage"
 	"github.com/reubenmiller/go-c8y/pkg/c8y"
 )
 
@@ -14,7 +14,7 @@ type FirmwareTenantController struct {
 	tenantStore    *FirmwareTenantStore
 	ctx            context.Context
 	c8yClient      *c8y.Client
-	awsClient      *aws.AWSClient
+	estClient      *est.ExternalStorageClient
 	serviceBaseUrl string
 }
 
@@ -65,8 +65,8 @@ func NewFirmware(name string, fwInfo ExtFirmwareInfoEntry, provider string, buck
 	return res
 }
 
-func NewFirmwareVersion(name string, version string, url string, provider string, bucketName string, objectKey string) *FirmwareVersion {
-	return &FirmwareVersion{
+func NewFirmwareVersion(name string, version string, url string, provider string, bucketName string, objectKey string) FirmwareVersion {
+	return FirmwareVersion{
 		ManagedObject: c8y.ManagedObject{
 			Name: name,
 			Type: "c8y_FirmwareBinary",
@@ -76,7 +76,7 @@ func NewFirmwareVersion(name string, version string, url string, provider string
 			Version: version,
 		},
 		Origin: &ExternalResourceOrigin{
-			Provider:   "aws",
+			Provider:   provider,
 			BucketName: bucketName,
 			ObjectKey:  objectKey,
 		},
@@ -113,8 +113,9 @@ func syncExtFwVersionEntriesWithCumulocity(controller *FirmwareTenantController,
 }
 
 func createFirmware(controller *FirmwareTenantController, extFwVersionEntry ExtFirmwareVersionEntry, extFwInfoEntry ExtFirmwareInfoEntry, updateTenantStore bool) (string, error) {
+	estClient := *controller.estClient
 	createdFirmware, _, fwErr := controller.c8yClient.Inventory.Create(controller.ctx,
-		NewFirmware(extFwVersionEntry.Name, extFwInfoEntry, "aws", controller.awsClient.GetBucketName(), extFwVersionEntry.Key))
+		NewFirmware(extFwVersionEntry.Name, extFwInfoEntry, estClient.GetProviderName(), estClient.GetBucketName(), extFwVersionEntry.Key))
 	if fwErr != nil {
 		return "", fwErr
 	}
@@ -132,9 +133,10 @@ func createFirmware(controller *FirmwareTenantController, extFwVersionEntry ExtF
 
 func createAndReferenceFirmwareVersion(controller *FirmwareTenantController, fwMoId string, name string, version string, objectKey string, updateTenantStore bool) {
 	// Create firmware version object
+	estClient := *controller.estClient
 	createdFwVersion, _, fwCreateErr := controller.c8yClient.Inventory.Create(
 		controller.ctx,
-		NewFirmwareVersion(name, version, "http://to-be-provided.org", "aws", controller.awsClient.GetBucketName(), objectKey))
+		NewFirmwareVersion(name, version, "http://to-be-provided.org", estClient.GetProviderName(), estClient.GetBucketName(), objectKey))
 	if fwCreateErr != nil {
 		slog.Error("Error while creating Firmware version. Skipping this iteration.", "error", fwCreateErr.Error())
 		return

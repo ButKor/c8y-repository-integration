@@ -1,4 +1,4 @@
-package aws
+package externalstorage
 
 import (
 	"context"
@@ -31,15 +31,15 @@ type AwsConnectionDetails struct {
 	Region          string `json:"region"`
 }
 
-func NewClient(ctx context.Context, client *c8y.Client, tenantOptionCategory string, tenantOptionKey string) *AWSClient {
-	// Read tenant option
+func (awsClient *AWSClient) Init(ctx context.Context, client *c8y.Client) {
+	tenantOptionCategory := "repo-integration-fw"
+	tenantOptionKey := "awsConnectionDetails"
 	tenantOptionConnectionDetails, _, e := client.TenantOptions.GetOption(ctx, tenantOptionCategory, tenantOptionKey)
 	if e != nil {
 		slog.Error("AWS Credentials were not found in tenant options. Make sure a tenant option for category="+tenantOptionCategory+" and key="+tenantOptionKey+"awsConnectionDetails exists & your service has READ access to tenant option. Exiting now. ", "err", e)
 		os.Exit(1)
 	}
 
-	// Parse value to struct
 	var connectionDetails AwsConnectionDetails
 	err := json.Unmarshal([]byte(tenantOptionConnectionDetails.Value), &connectionDetails)
 	if err != nil {
@@ -47,23 +47,24 @@ func NewClient(ctx context.Context, client *c8y.Client, tenantOptionCategory str
 		os.Exit(1)
 	}
 
-	// Now create AWS Client
 	cfg, _ := config.LoadDefaultConfig(context.TODO(),
 		config.WithRegion(connectionDetails.Region),
 		config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(connectionDetails.AccessKeyId, connectionDetails.SecretAccessKey, "")))
 	c := s3.NewFromConfig(cfg)
-	return &AWSClient{
-		s3Client:          c,
-		s3PresignClient:   s3.NewPresignClient(c),
-		connectionDetails: connectionDetails,
-	}
+	awsClient.s3Client = c
+	awsClient.s3PresignClient = s3.NewPresignClient(c)
+	awsClient.connectionDetails = connectionDetails
 }
 
-func (awsClient AWSClient) GetBucketName() string {
+func (awsClient *AWSClient) GetBucketName() string {
 	return awsClient.connectionDetails.BucketName
 }
 
-func (awsClient AWSClient) ListBucketContent() {
+func (awsClient *AWSClient) GetProviderName() string {
+	return "aws"
+}
+
+func (awsClient *AWSClient) ListBucketContent() {
 	output, err := awsClient.s3Client.ListObjectsV2(context.TODO(), &s3.ListObjectsV2Input{
 		Bucket: aws.String(awsClient.connectionDetails.BucketName),
 	})
@@ -76,7 +77,7 @@ func (awsClient AWSClient) ListBucketContent() {
 	}
 }
 
-func (awsClient AWSClient) GetPresignURL(awsObjectKey string) (string, error) {
+func (awsClient *AWSClient) GetPresignURL(awsObjectKey string) (string, error) {
 	presignedUrl, err := awsClient.s3PresignClient.PresignGetObject(context.Background(),
 		&s3.GetObjectInput{
 			Bucket: aws.String(awsClient.connectionDetails.BucketName),
@@ -89,7 +90,7 @@ func (awsClient AWSClient) GetPresignURL(awsObjectKey string) (string, error) {
 	return presignedUrl.URL, err
 }
 
-func (awsClient AWSClient) GetFileContent(awsObjectKey string) (string, error) {
+func (awsClient *AWSClient) GetFileContent(awsObjectKey string) (string, error) {
 	result, err := awsClient.s3Client.GetObject(context.Background(), &s3.GetObjectInput{
 		Bucket: aws.String(awsClient.connectionDetails.BucketName),
 		Key:    aws.String(awsObjectKey),

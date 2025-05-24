@@ -13,8 +13,8 @@ import (
 
 	"github.com/hashicorp/go-retryablehttp"
 	"github.com/kobu/repo-int/internal/model"
-	"github.com/kobu/repo-int/pkg/aws"
 	"github.com/kobu/repo-int/pkg/c8yauth"
+	est "github.com/kobu/repo-int/pkg/externalstorage"
 	"github.com/kobu/repo-int/pkg/handlers"
 	"github.com/labstack/echo/v4"
 	"github.com/reubenmiller/go-c8y/pkg/c8y"
@@ -91,7 +91,7 @@ func NewApp() *App {
 	return app
 }
 
-func syncSubscriptionsWithTenantControllers(c *c8y.Client, awsClient *aws.AWSClient, fwControllers *FirmwareTenantControllers, serviceBaseUrl string) {
+func syncSubscriptionsWithTenantControllers(c *c8y.Client, estClient *est.ExternalStorageClient, fwControllers *FirmwareTenantControllers, serviceBaseUrl string) {
 	subscriptions, _, _ := c.Application.GetCurrentApplicationSubscriptions(c.Context.BootstrapUserFromEnvironment())
 	for _, user := range subscriptions.Users {
 		tenant := user.Tenant
@@ -112,7 +112,7 @@ func syncSubscriptionsWithTenantControllers(c *c8y.Client, awsClient *aws.AWSCli
 			},
 			ctx:            c.Context.ServiceUserContext(tenant, false),
 			c8yClient:      c,
-			awsClient:      awsClient,
+			estClient:      estClient,
 			tenantId:       tenant,
 			serviceBaseUrl: serviceBaseUrl,
 		}
@@ -121,11 +121,17 @@ func syncSubscriptionsWithTenantControllers(c *c8y.Client, awsClient *aws.AWSCli
 	}
 }
 
-func syncSubscriptionsWithTenantControllersPeriodically(c *c8y.Client, awsClient *aws.AWSClient, fwControllers *FirmwareTenantControllers, serviceBaseUrl string) {
+func syncSubscriptionsWithTenantControllersPeriodically(c *c8y.Client, estClient *est.ExternalStorageClient, fwControllers *FirmwareTenantControllers, serviceBaseUrl string) {
 	for {
-		syncSubscriptionsWithTenantControllers(c, awsClient, fwControllers, serviceBaseUrl)
+		syncSubscriptionsWithTenantControllers(c, estClient, fwControllers, serviceBaseUrl)
 		time.Sleep(60 * time.Second)
 	}
+}
+
+func Test(application *microservice.Microservice) est.ExternalStorageClient {
+	awsClient := &est.AWSClient{}
+	awsClient.Init(application.WithServiceUser(application.Client.TenantName), application.Client)
+	return awsClient
 }
 
 // Run starts the microservice
@@ -139,18 +145,24 @@ func (a *App) Run() {
 	slog.Info("Service BaseURL", "url", serviceBaseUrl)
 
 	// create clients
-	awsClient := aws.NewClient(application.WithServiceUser(application.Client.TenantName), application.Client, "repo-integration-fw", "awsConnectionDetails")
+	// awsClient := est.NewClient(application.WithServiceUser(application.Client.TenantName), application.Client, "repo-integration-fw", "awsConnectionDetails")
+
 	// azClient := az.NewClient(application.WithServiceUser(application.Client.TenantName), application.Client, "repo-integration-fw", "azureConnectionDetails")
 	// fmt.Println(azClient)
+
+	estClient := Test(application)
+	estClient.ListBucketContent()
+
+	// est.ListBucketContent(awsClient)
 
 	// init Firmware Controllers
 	tenantFwControllers := FirmwareTenantControllers{
 		tenantControllers: make(map[string]FirmwareTenantController),
 	}
 	// check registered tenants, create a Firmware Controller for each of them
-	syncSubscriptionsWithTenantControllers(application.Client, awsClient, &tenantFwControllers, serviceBaseUrl)
+	syncSubscriptionsWithTenantControllers(application.Client, &estClient, &tenantFwControllers, serviceBaseUrl)
 	// Start routine to periodically check for tenant subscriptions and add Firmware Controller for Each
-	go syncSubscriptionsWithTenantControllersPeriodically(application.Client, awsClient, &tenantFwControllers, serviceBaseUrl)
+	go syncSubscriptionsWithTenantControllersPeriodically(application.Client, &estClient, &tenantFwControllers, serviceBaseUrl)
 	// let firmware controller observe external storage
 	go tenantFwControllers.AutoObserve(45)
 
@@ -165,7 +177,7 @@ func (a *App) Run() {
 		a.echoServer.Use(c8yauth.AuthenticationBasic(provider))
 		a.echoServer.Use(c8yauth.AuthenticationBearer(provider))
 
-		a.setRouters(awsClient)
+		a.setRouters(&estClient)
 
 		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 		defer stop()
@@ -198,8 +210,8 @@ func setDefaultContextHandler(e *echo.Echo, c8yms *microservice.Microservice) {
 		}
 	})
 }
-func (a *App) setRouters(awsClient *aws.AWSClient) {
+func (a *App) setRouters(estClient *est.ExternalStorageClient) {
 	server := a.echoServer
-	handlers.RegisterFirmwareHandler(server, awsClient)
+	handlers.RegisterFirmwareHandler(server, estClient)
 	a.c8ymicroservice.AddHealthEndpointHandlers(server)
 }
