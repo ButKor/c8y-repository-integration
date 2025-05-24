@@ -138,8 +138,10 @@ func (a *App) Run() {
 	serviceBaseUrl := bUrl.Scheme + "://" + bUrl.Hostname() + "/service/" + application.Application.ContextPath
 	slog.Info("Service BaseURL", "url", serviceBaseUrl)
 
-	// create AWS Client
+	// create clients
 	awsClient := aws.NewClient(application.WithServiceUser(application.Client.TenantName), application.Client, "repo-integration-fw", "awsConnectionDetails")
+	// azClient := az.NewClient(application.WithServiceUser(application.Client.TenantName), application.Client, "repo-integration-fw", "azureConnectionDetails")
+	// fmt.Println(azClient)
 
 	// init Firmware Controllers
 	tenantFwControllers := FirmwareTenantControllers{

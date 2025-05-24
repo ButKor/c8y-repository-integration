@@ -17,8 +17,8 @@ type FirmwareStoreFwEntry struct {
 type FirmwareStoreVersionEntry struct {
 	TenantId        string `json:"tenantId"`
 	MoId            string `json:"id"`
-	Name            string `json:"name"`
-	Type            string `json:"type"`
+	MoType          string `json:"type"`
+	FwName          string `json:"name"`
 	IsPatch         bool   `json:"isPatch"`
 	PatchDependency string `json:"patchDependency"`
 	Version         string `json:"version"`
@@ -30,11 +30,11 @@ func (store *FirmwareTenantStore) AddFirmware(e FirmwareStoreFwEntry) {
 }
 
 func (store *FirmwareTenantStore) AddFirmwareVersion(e FirmwareStoreVersionEntry) {
-	val, ok := store.FirmwareVersionsByName[e.Name]
+	val, ok := store.FirmwareVersionsByName[e.FwName]
 	if ok {
-		store.FirmwareVersionsByName[e.Name] = append(val, e)
+		store.FirmwareVersionsByName[e.FwName] = append(val, e)
 	} else {
-		store.FirmwareVersionsByName[e.Name] = []FirmwareStoreVersionEntry{e}
+		store.FirmwareVersionsByName[e.FwName] = []FirmwareStoreVersionEntry{e}
 	}
 }
 

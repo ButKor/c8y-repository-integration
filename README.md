@@ -55,3 +55,9 @@ Service can be configured with the below tenant options:
 Category | Key | Value
 --|--|--|
 repo-integration-fw | awsConnectionDetails | '{"region": "{aws region}", "secretAccessKey": "{aws access secret}", "accessKeyID": "{aws access key}", "bucketName": "{bucket name}" }'
+
+# Next steps
+
+* Supporting Azure Blob storage
+
+* Next to firmware, also support software-repository

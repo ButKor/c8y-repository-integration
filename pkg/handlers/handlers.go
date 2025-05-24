@@ -4,6 +4,8 @@ import (
 	"context"
 	"log/slog"
 	"net/http"
+	"strconv"
+	"time"
 
 	"github.com/kobu/repo-int/internal/model"
 	"github.com/kobu/repo-int/pkg/aws"
@@ -90,6 +92,10 @@ func DownloadFileViaRedirect(c echo.Context) error {
 			"message": "Missing 'id' parameter in request",
 		})
 	}
+	v := c.QueryParam("sleep")
+	i, _ := strconv.Atoi(v)
+	duration := time.Second * time.Duration(i)
+	time.Sleep(duration)
 	// generated presigned url and check result
 	presignedUrl, statusCode, content := GeneratePresignedUrl(cc.Microservice.WithServiceUser(auth.Tenant), cc.Microservice.Client, id)
 	if statusCode != http.StatusOK {

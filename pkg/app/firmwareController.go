@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 
 	"github.com/kobu/repo-int/pkg/aws"
@@ -163,8 +164,8 @@ func createAndReferenceFirmwareVersion(controller *FirmwareTenantController, fwM
 		controller.tenantStore.AddFirmwareVersion(FirmwareStoreVersionEntry{
 			TenantId:        controller.tenantId,
 			MoId:            createdFwVersion.ID,
-			Name:            createdFwVersion.Name,
-			Type:            createdFwVersion.Type,
+			MoType:          createdFwVersion.Type,
+			FwName:          createdFwVersion.Name,
 			IsPatch:         false,
 			PatchDependency: "",
 			Version:         version,
@@ -186,7 +187,7 @@ func syncCumulocityWithextFwVersionEntries(controller *FirmwareTenantController,
 
 func contains(extFwVersionEntries []ExtFirmwareVersionEntry, storeEntry FirmwareStoreVersionEntry) bool {
 	for _, e := range extFwVersionEntries {
-		if e.Name == storeEntry.Name && e.Version == storeEntry.Version {
+		if e.Name == storeEntry.FwName && e.Version == storeEntry.Version {
 			return true
 		}
 	}
@@ -194,56 +195,71 @@ func contains(extFwVersionEntries []ExtFirmwareVersionEntry, storeEntry Firmware
 }
 
 // scans tenants firmware repository and caches it to tenant store
-// TODO: support more than 2000 elements
+// TODO: adapt pagesizes
 func (c *FirmwareTenantController) rebuildTenantStore() {
 	tenantName := c.c8yClient.GetTenantName(c.ctx)
 	// collect all firmware objects
-	firmwares, _, _ := c.c8yClient.Inventory.GetManagedObjects(
-		c.ctx, &c8y.ManagedObjectOptions{
-			Type:              "c8y_Firmware",
-			PaginationOptions: *c8y.NewPaginationOptions(2000),
-		},
-	)
+	cp := 1
+	for {
+		firmwares, _, _ := c.c8yClient.Inventory.GetManagedObjects(
+			c.ctx, &c8y.ManagedObjectOptions{
+				Type: "c8y_Firmware",
+				PaginationOptions: c8y.PaginationOptions{
+					PageSize:       1,
+					CurrentPage:    &cp,
+					WithTotalPages: true,
+				},
+			},
+		)
 
-	// iterate over firmware items, collect child-additions and register everything in the store
-	for _, fwObject := range firmwares.Items {
-		firmwareId := fwObject.Get("id").String()
-		firmwareName := fwObject.Get("name").String()
-		childAdditionReferences, _, _ := c.c8yClient.Inventory.GetChildAdditions(c.ctx, firmwareId, &c8y.ManagedObjectOptions{
-			PaginationOptions: *c8y.NewPaginationOptions(2000),
-			Type:              "c8y_FirmwareBinary",
-		})
+		// iterate over firmware items, collect child-additions and register everything in the store
+		for _, fwObject := range firmwares.Items {
+			firmwareId := fwObject.Get("id").String()
+			firmwareName := fwObject.Get("name").String()
 
-		c.tenantStore.AddFirmware(FirmwareStoreFwEntry{
-			TenantId: tenantName,
-			MoId:     firmwareId,
-			MoName:   firmwareName,
-			MoType:   fwObject.Get("type").String(),
-		})
+			icp := 1
+			for {
+				childAdditionReferences, resp, _ := c.c8yClient.Inventory.GetChildAdditions(c.ctx, firmwareId, &c8y.ManagedObjectOptions{
+					PaginationOptions: c8y.PaginationOptions{
+						PageSize:       1,
+						CurrentPage:    &icp,
+						WithTotalPages: true,
+					},
+					Query: "type eq c8y_FirmwareBinary",
+				})
+				c.tenantStore.AddFirmware(FirmwareStoreFwEntry{
+					TenantId: tenantName,
+					MoId:     firmwareId,
+					MoName:   firmwareName,
+					MoType:   fwObject.Get("type").String(),
+				})
 
-		// collect all IDs from child additions
-		var ids []string
-		for _, e := range childAdditionReferences.References {
-			mo := e.ManagedObject
-			ids = append(ids, mo.ID)
-		}
-		// query object by object (TODO: improve this to not send a GET for each individual MO)
-		for _, e := range ids {
-			mo, _, _ := c.c8yClient.Inventory.GetManagedObject(c.ctx, e, nil)
-
-			isPatch := mo.Item.Get("c8y_Patch").Exists()
-			patchDependency := mo.Item.Get("c8y_Patch.dependency").String()
-			fw := FirmwareStoreVersionEntry{
-				TenantId:        tenantName,
-				MoId:            mo.Item.Get("id").String(),
-				Name:            firmwareName,
-				Type:            mo.Item.Get("type").String(),
-				IsPatch:         isPatch,
-				PatchDependency: patchDependency,
-				Version:         mo.Item.Get("c8y_Firmware.version").String(),
-				URL:             mo.Item.Get("c8y_Firmware.url").String(),
+				for _, ref := range resp.JSON("references").Array() {
+					isPatch := ref.Get("managedObject.c8y_Patch").Exists()
+					patchDependency := ref.Get("managedObject.c8y_Patch.dependency").String()
+					fw := FirmwareStoreVersionEntry{
+						TenantId:        tenantName,
+						MoId:            ref.Get("managedObject.id").String(),
+						MoType:          ref.Get("managedObject.type").String(),
+						FwName:          firmwareName,
+						IsPatch:         isPatch,
+						PatchDependency: patchDependency,
+						Version:         ref.Get("managedObject.c8y_Firmware.version").String(),
+						URL:             ref.Get("managedObject.c8y_Firmware.url").String(),
+					}
+					c.tenantStore.AddFirmwareVersion(fw)
+				}
+				if *childAdditionReferences.Statistics.TotalPages == *childAdditionReferences.Statistics.CurrentPage {
+					break
+				}
+				icp++
 			}
-			c.tenantStore.AddFirmwareVersion(fw)
 		}
+
+		if *firmwares.Statistics.CurrentPage == *firmwares.Statistics.TotalPages {
+			break
+		}
+		cp++
 	}
+	fmt.Println("test")
 }
