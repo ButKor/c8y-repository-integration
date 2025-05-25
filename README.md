@@ -1,7 +1,3 @@
-# Attention / Disclaimer
-
-This repository is **work in progress**. It is not ready to use yet. 
-
 # About
 
 A repository to integrate the Cumulocity Firmware Repository with an AWS storage account. The service supports:
