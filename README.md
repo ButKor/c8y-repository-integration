@@ -78,10 +78,10 @@ File Content (sample):
 {"name": "my firmware 3", "description": "Description for firmware 3"}
 ```
 
-* `c8y-firmware-version.json`:
+* `c8y-firmware-versions.json`:
 
 ```text
-Filename: c8y-firmware-version.json
+Filename: c8y-firmware-versions.json
 About: In this file you're describing details about each firmware version using the fields:
 * key: the file location inside your external storage solution. Mandatory.
 * name: the firmware name of this version (needs to match with the name-field in c8y-firmware-info.json). Mandatory.
