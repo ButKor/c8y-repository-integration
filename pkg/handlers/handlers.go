@@ -5,9 +5,9 @@ import (
 	"log/slog"
 	"net/http"
 
-	"github.com/kobu/repo-int/internal/model"
-	"github.com/kobu/repo-int/pkg/c8yauth"
-	est "github.com/kobu/repo-int/pkg/externalstorage"
+	"github.com/kobu/dm-repo-integration/internal/model"
+	"github.com/kobu/dm-repo-integration/pkg/c8yauth"
+	est "github.com/kobu/dm-repo-integration/pkg/externalstorage"
 	"github.com/labstack/echo/v4"
 	"github.com/reubenmiller/go-c8y/pkg/c8y"
 )

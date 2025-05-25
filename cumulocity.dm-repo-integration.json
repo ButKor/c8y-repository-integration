@@ -1,7 +1,7 @@
 {
     "apiVersion": "v2",
-    "name": "c8y-repo-int",
-    "version": "0.0.1",
+    "name": "dm-repo-integration",
+    "version": "0.0.2",
     "provider": {
       "name": "Korbinian Butz",
       "domain": "https://cumulocity.com",

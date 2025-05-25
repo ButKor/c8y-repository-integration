@@ -4,7 +4,7 @@ import (
 	"context"
 	"log/slog"
 
-	est "github.com/kobu/repo-int/pkg/externalstorage"
+	est "github.com/kobu/dm-repo-integration/pkg/externalstorage"
 	"github.com/reubenmiller/go-c8y/pkg/c8y"
 )
 

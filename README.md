@@ -107,15 +107,18 @@ Each synchronized firmware version has a URL that points towards this Microservi
 
 * via curl (with basic auth):
 ```sh
-$ curl -sL -u '${cumulocityTenantId}/${CumulocityUserName}:${CumulocityPassword}' -X 'GET' 'http://localhost:8080/firmware/download?id=9963218'
+$ curl -sL -o "YourfileName.zip" -u '${cumulocityTenantId}/${CumulocityUserName}:${CumulocityPassword}' -X 'GET' 'https://kb.latest.stage.c8y.io/service/dm-repo-integration/firmware/download?id=9963218'
 ```
 
 * via curl (with OAI token): 
 ```sh
-$ curl -k -H 'Authorization: Bearer ${CumulocityOAIToken}' -X 'GET' 'http://localhost:8080/firmware/download?id=9963218'
+$ curl -k -o "YourfileName.zip" -H 'Authorization: Bearer ${CumulocityOAIToken}' -X 'GET' 'https://kb.latest.stage.c8y.io/service/dm-repo-integration/firmware/download?id=9963218'
 ```
 
-* via thin-edge: TODO
+* via thin-edge: 
+```sh
+$ tedge http get "/c8y/service/dm-repo-integration/firmware/download?id=9963218" > YourFileName.zip
+```
 
 # Next steps
 

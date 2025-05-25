@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/kobu/repo-int/pkg/app"
+	"github.com/kobu/dm-repo-integration/pkg/app"
 )
 
 func main() {

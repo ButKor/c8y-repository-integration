@@ -7,7 +7,7 @@
 # vim: set ts=2 sw=2 tw=0 fo=cnqoj
 
 version: 2
-project_name: repo-int
+project_name: dm-repo-integration
 
 before:
   hooks:
@@ -20,7 +20,7 @@ builds:
       - linux
     main: cmd/main/main.go
     ldflags:
-      - -s -w -X github.com/reubenmiller/c8y-devicecert/pkg/app.Version={{.Version}} -X github.com/reubenmiller/c8y-devicecert/pkg/app.Commit={{.Commit}} -X github.com/reubenmiller/c8y-devicecert/pkg/app.BuildTime={{.Date}} -X github.com/reubenmiller/c8y-devicecert/pkg/app.Branch={{.Branch}}
+      - -s -w -X github.com/kobu/c8y-repo-int/pkg/app.Version={{.Version}} -X github.com/kobu/c8y-repo-int/pkg/app.Commit={{.Commit}} -X github.com/kobu/c8y-repo-int/pkg/app.BuildTime={{.Date}} -X github.com/kobu/c8y-repo-int/pkg/app.Branch={{.Branch}}
 
 archives:
   - formats: [tar.gz]

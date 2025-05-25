@@ -1,4 +1,4 @@
-module github.com/kobu/repo-int
+module github.com/kobu/dm-repo-integration
 
 require (
 	github.com/aws/aws-sdk-go-v2 v1.36.3
