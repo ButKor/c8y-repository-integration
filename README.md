@@ -120,6 +120,10 @@ $ curl -k -o "YourfileName.zip" -H 'Authorization: Bearer ${CumulocityOAIToken}'
 $ tedge http get "/c8y/service/dm-repo-integration/firmware/download?id=9963218" > YourFileName.zip
 ```
 
+# Multi-Tenancy
+
+Service runs in multi-tenancy mode by default. This enables you having a "multi-tenant repository" where the artifacts are only stored once on the external storage and auto-synced to every Tenant that is subscribed to this Service.
+
 # Roadmap
 
 * Supporting firmware patches (for now, create a new version for patching)

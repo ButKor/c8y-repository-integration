@@ -87,7 +87,7 @@ func NewApp() *App {
 	}
 
 	c8ymicroservice.Config.SetDefault("server.port", "80")
-	c8ymicroservice.RegisterMicroserviceAgent()
+	// c8ymicroservice.RegisterMicroserviceAgent()
 	app.c8ymicroservice = c8ymicroservice
 	return app
 }
@@ -179,7 +179,6 @@ func (a *App) Run() {
 		time.Sleep(time.Second * 10)
 		os.Exit(1)
 	}
-	estClient.ListBucketContent()
 
 	// init Firmware Controllers
 	tenantFwControllers := FirmwareTenantControllers{
