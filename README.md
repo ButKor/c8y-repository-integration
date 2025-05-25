@@ -6,9 +6,11 @@ This repository is **work in progress**. It is not ready to use yet.
 
 A repository to integrate the Cumulocity Firmware Repository with an AWS storage account. The service supports:
 
-* Discovering firmware images stored in an S3 bucket. These images will be synchronized with Cumulocitys Firmware Repositories. It does *not* copy the actual Files to the Cumulocity repository, it works with URLs instead. 
+* Discovering firmware images stored in an external cloud storage (AWS S3, Azure Blobs). These images will be synchronized with Cumulocitys Firmware Repositories. It does *not* copy the actual Files to the Cumulocity repository, it works with URLs instead.
 
-* It exposes an endpoint to download the firmware images. 
+* It exposes an endpoint to download the firmware images. The devices sending their requests to the Cumulocity Microservice, which redirects the request to a (presigned) URL to the external solution.
+
+![Overview](docs/imgs/overview.png "Overview")
 
 # Sequence Diagram 
 
