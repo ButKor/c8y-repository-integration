@@ -16,9 +16,10 @@ type FirmwareStoreFwEntry struct {
 
 type FirmwareStoreVersionEntry struct {
 	TenantId        string `json:"tenantId"`
-	MoId            string `json:"id"`
-	MoType          string `json:"type"`
-	FwName          string `json:"name"`
+	FwName          string `json:"fwName"`
+	FwMoId          string `json:"fwMoId"`
+	MoId            string `json:"moId"`
+	MoType          string `json:"moType"`
 	IsPatch         bool   `json:"isPatch"`
 	PatchDependency string `json:"patchDependency"`
 	Version         string `json:"version"`

@@ -6,10 +6,11 @@ import (
 	"encoding/json"
 	"log/slog"
 	"maps"
-	"os"
 	"slices"
 	"strings"
 	"time"
+
+	est "github.com/kobu/dm-repo-integration/pkg/externalstorage"
 )
 
 type ExtFirmwareInfoEntry struct {
@@ -26,6 +27,7 @@ type ExtFirmwareVersionEntry struct {
 
 type FirmwareTenantControllers struct {
 	tenantControllers  map[string]FirmwareTenantController
+	estClient          est.ExternalStorageClient
 	lastKnownInputHash string
 }
 
@@ -55,8 +57,16 @@ func (c *FirmwareTenantControllers) SyncAllRegisteredTenantsWithIndexFiles() {
 }
 
 func (c *FirmwareTenantControllers) SyncTenantsWithIndexFiles(tenantIds []string) {
-	contentFwVersionFile := ReadExtFileContentsAsString("c8y-firmware-versions.json")
-	contentFwInfoFile := ReadExtFileContentsAsString("c8y-firmware-info.json")
+	contentFwVersionFile := c.ReadExtFileContentsAsString("c8y-firmware-versions.json")
+	if len(contentFwVersionFile) == 0 {
+		slog.Error("Firmware Version Info file (c8y-firmware-versions.json) could not be read or is empty. Service stops syncing attempt.")
+		return
+	}
+	contentFwInfoFile := c.ReadExtFileContentsAsString("c8y-firmware-info.json")
+	if len(contentFwInfoFile) == 0 {
+		slog.Error("Firmware Info file (c8y-firmware-info.json) could not be read or is empty. Service stops syncing attempt.")
+		return
+	}
 	inputHash := GetMD5Hash(contentFwVersionFile) + GetMD5Hash(contentFwVersionFile)
 
 	if inputHash == c.lastKnownInputHash {
@@ -80,11 +90,13 @@ func (c *FirmwareTenantControllers) SyncTenantsWithIndexFiles(tenantIds []string
 	c.lastKnownInputHash = inputHash
 }
 
-func ReadExtFileContentsAsString(objectKey string) string {
-	res, _ := os.ReadFile(objectKey)
-	return string(res)
-	// fc, _ := o.awsClient.GetFileContent("firmware-index.json")
-	// return fc
+func (c *FirmwareTenantControllers) ReadExtFileContentsAsString(objectKey string) string {
+	res, err := c.estClient.GetFileContent(objectKey)
+	if err != nil {
+		slog.Error("Error while reading file from external storage", "objectKey", objectKey, "err", err)
+		return ""
+	}
+	return res
 }
 
 // input = content of the index file located on external storage
@@ -95,7 +107,7 @@ func ParseExtFwVersionContents(fileContentFwVersionFile string) []ExtFirmwareVer
 		data := ExtFirmwareVersionEntry{}
 		err := json.Unmarshal([]byte(e), &data)
 		if err != nil {
-			slog.Error("Error wile unmarshaling following line: " + e + ". Skipping this entry. Error: " + err.Error())
+			slog.Error("Error wile unmarshaling following line: "+e+". Skipping this entry", "err", err)
 			continue
 		}
 		indexEntries = append(indexEntries, data)

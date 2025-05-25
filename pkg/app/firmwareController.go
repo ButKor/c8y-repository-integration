@@ -43,7 +43,7 @@ type Firmware struct {
 	c8y.ManagedObject
 	Filter      *C8yFilter              `json:"c8y_Filter"`
 	Description string                  `json:"description"`
-	Origin      *ExternalResourceOrigin `json:"resourceOrigin,omitempty"`
+	Origin      *ExternalResourceOrigin `json:"externalResourceOrigin,omitempty"`
 }
 
 func NewFirmware(name string, fwInfo ExtFirmwareInfoEntry, provider string, bucketName string, objectKey string) *Firmware {
@@ -164,9 +164,10 @@ func createAndReferenceFirmwareVersion(controller *FirmwareTenantController, fwM
 	if updateTenantStore {
 		controller.tenantStore.AddFirmwareVersion(FirmwareStoreVersionEntry{
 			TenantId:        controller.tenantId,
+			FwName:          createdFwVersion.Name,
+			FwMoId:          fwMoId,
 			MoId:            createdFwVersion.ID,
 			MoType:          createdFwVersion.Type,
-			FwName:          createdFwVersion.Name,
 			IsPatch:         false,
 			PatchDependency: "",
 			Version:         version,
@@ -180,7 +181,35 @@ func syncCumulocityWithextFwVersionEntries(controller *FirmwareTenantController,
 	for _, versionList := range controller.tenantStore.FirmwareVersionsByName {
 		for _, version := range versionList {
 			if !contains(extFwVersionEntries, version) {
-				// version existing in Cumulocity but not in indexList => delete in Cumulocity
+				mo, _, _ := controller.c8yClient.Inventory.GetManagedObject(controller.ctx, version.MoId, &c8y.ManagedObjectOptions{
+					WithParents: true,
+				})
+				createdByService := mo.Item.Get("externalResourceOrigin").Exists()
+				if !createdByService {
+					continue
+				}
+				// delete Version
+				_, err := controller.c8yClient.Inventory.Delete(controller.ctx, version.MoId)
+				if err != nil {
+					slog.Error("Error while deleting firmware version. Stopping clean-up process for this version.", "versionMoId", version.MoId, "firmwareName", version.FwName, "fwVersion", version.Version, "err", err)
+					continue
+				}
+				slog.Info("Deleted Firmware Version", "versionMoId", version.MoId, "firmwareName", version.FwName, "fwVersion", version.Version)
+
+				// check if parent has still other child-additions. Delete Parent if not.
+				childAdditions, _, err := controller.c8yClient.Inventory.GetChildAdditions(controller.ctx, version.FwMoId, &c8y.ManagedObjectOptions{
+					PaginationOptions: c8y.PaginationOptions{
+						PageSize: 1,
+					},
+				})
+				if err != nil {
+					slog.Error("Error while requesting childadditions. Parent will not be deleted", "firmwareName", version.FwName, "firmwareMoId", version.FwMoId, "err", err)
+					continue
+				}
+				if len(childAdditions.References) == 0 {
+					slog.Info("Firmware does not have any child-additions anymore, deleting it ...", "firmware", version.FwName)
+					controller.c8yClient.Inventory.Delete(controller.ctx, version.FwMoId)
+				}
 			}
 		}
 	}
@@ -248,6 +277,7 @@ func (c *FirmwareTenantController) rebuildTenantStore() {
 						MoId:            ref.Get("managedObject.id").String(),
 						MoType:          ref.Get("managedObject.type").String(),
 						FwName:          firmwareName,
+						FwMoId:          firmwareId,
 						IsPatch:         isPatch,
 						PatchDependency: patchDependency,
 						Version:         ref.Get("managedObject.c8y_Firmware.version").String(),

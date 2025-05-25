@@ -1,1 +1,0 @@
-curl -s -L -u "t40073098/korbinian.butz@cumulocity.com:$PASS"  "http://localhost:8080/firmware/download?id=8257206"

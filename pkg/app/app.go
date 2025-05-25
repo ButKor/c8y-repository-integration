@@ -182,6 +182,7 @@ func (a *App) Run() {
 
 	// init Firmware Controllers
 	tenantFwControllers := FirmwareTenantControllers{
+		estClient:         estClient,
 		tenantControllers: make(map[string]FirmwareTenantController),
 	}
 	// check registered tenants, create a Firmware Controller for each of them
@@ -189,7 +190,8 @@ func (a *App) Run() {
 	// Start routine to periodically check for tenant subscriptions and add Firmware Controller for Each
 	go syncSubscriptionsWithTenantControllersPeriodically(application.Client, &estClient, &tenantFwControllers, serviceBaseUrl)
 	// let firmware controller observe external storage
-	go tenantFwControllers.AutoObserve(45)
+	// TODO make this configurable
+	go tenantFwControllers.AutoObserve(90)
 
 	// now start webserver
 	if a.echoServer == nil {
