@@ -117,7 +117,10 @@ $ curl -k -o "YourfileName.zip" -H 'Authorization: Bearer ${CumulocityOAIToken}'
 
 * via thin-edge: 
 ```sh
+# either with 'tedge http' command (introduced with thin-edge.io version 1.5.0)
 $ tedge http get "/c8y/service/dm-repo-integration/firmware/download?id=9963218" > YourFileName.zip
+# or with using Cumulocity Proxy directly
+$ curl -sL -o "YourFileName.zip" "http://127.0.0.1:8001/c8y/service/dm-repo-integration/firmware/download?id=3161253"
 ```
 
 # Multi-Tenancy
