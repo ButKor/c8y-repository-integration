@@ -7,9 +7,9 @@ import (
 )
 
 type ExternalStorageClient interface {
-	Init(ctx context.Context, client *c8y.Client)
+	Init(ctx context.Context, client *c8y.Client) error
 	GetFileContent(awsObjectKey string) (string, error)
-	GetPresignURL(awsObjectKey string) (string, error)
+	GetPresignedURL(awsObjectKey string) (string, error)
 	ListBucketContent()
 	GetBucketName() string
 	GetProviderName() string

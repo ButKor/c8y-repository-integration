@@ -2,7 +2,6 @@ package app
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
 
 	est "github.com/kobu/repo-int/pkg/externalstorage"
@@ -197,7 +196,6 @@ func contains(extFwVersionEntries []ExtFirmwareVersionEntry, storeEntry Firmware
 }
 
 // scans tenants firmware repository and caches it to tenant store
-// TODO: adapt pagesizes
 func (c *FirmwareTenantController) rebuildTenantStore() {
 	tenantName := c.c8yClient.GetTenantName(c.ctx)
 	// collect all firmware objects
@@ -207,12 +205,15 @@ func (c *FirmwareTenantController) rebuildTenantStore() {
 			c.ctx, &c8y.ManagedObjectOptions{
 				Type: "c8y_Firmware",
 				PaginationOptions: c8y.PaginationOptions{
-					PageSize:       1,
+					PageSize:       100,
 					CurrentPage:    &cp,
 					WithTotalPages: true,
 				},
 			},
 		)
+		if len(firmwares.ManagedObjects) == 0 {
+			break
+		}
 
 		// iterate over firmware items, collect child-additions and register everything in the store
 		for _, fwObject := range firmwares.Items {
@@ -223,12 +224,15 @@ func (c *FirmwareTenantController) rebuildTenantStore() {
 			for {
 				childAdditionReferences, resp, _ := c.c8yClient.Inventory.GetChildAdditions(c.ctx, firmwareId, &c8y.ManagedObjectOptions{
 					PaginationOptions: c8y.PaginationOptions{
-						PageSize:       1,
+						PageSize:       100,
 						CurrentPage:    &icp,
 						WithTotalPages: true,
 					},
 					Query: "type eq c8y_FirmwareBinary",
 				})
+				if len(childAdditionReferences.References) == 0 {
+					break
+				}
 				c.tenantStore.AddFirmware(FirmwareStoreFwEntry{
 					TenantId: tenantName,
 					MoId:     firmwareId,
@@ -263,5 +267,4 @@ func (c *FirmwareTenantController) rebuildTenantStore() {
 		}
 		cp++
 	}
-	fmt.Println("test")
 }

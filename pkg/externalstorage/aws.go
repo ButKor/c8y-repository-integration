@@ -4,10 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log"
 	"log/slog"
-	"os"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -31,29 +31,34 @@ type AwsConnectionDetails struct {
 	Region          string `json:"region"`
 }
 
-func (awsClient *AWSClient) Init(ctx context.Context, client *c8y.Client) {
-	tenantOptionCategory := "repo-integration-fw"
-	tenantOptionKey := "awsConnectionDetails"
+func (awsClient *AWSClient) Init(ctx context.Context, client *c8y.Client) error {
+	tenantOptionCategory := "repoIntegrationFirmware"
+	tenantOptionKey := "awsS3ConnectionDetails"
 	tenantOptionConnectionDetails, _, e := client.TenantOptions.GetOption(ctx, tenantOptionCategory, tenantOptionKey)
 	if e != nil {
-		slog.Error("AWS Credentials were not found in tenant options. Make sure a tenant option for category="+tenantOptionCategory+" and key="+tenantOptionKey+"awsConnectionDetails exists & your service has READ access to tenant option. Exiting now. ", "err", e)
-		os.Exit(1)
+		slog.Error("AWS Credentials were not found in tenant options. Make sure a tenant option for category="+tenantOptionCategory+" and key="+tenantOptionKey+" exists and your service has READ access to tenant option. ", "err", e)
+		return e
 	}
 
 	var connectionDetails AwsConnectionDetails
 	err := json.Unmarshal([]byte(tenantOptionConnectionDetails.Value), &connectionDetails)
 	if err != nil {
-		slog.Error("Error while unmarshalling tenantOption for awsConnectionDetails. Make sure the tenantoptions value aligns with documentation. Exiting now.", "err", e)
-		os.Exit(1)
+		slog.Error("Error while unmarshalling tenantOption for awsConnectionDetails. Make sure the tenantoptions value aligns with documentation.", "err", e)
+		return err
 	}
 
-	cfg, _ := config.LoadDefaultConfig(context.TODO(),
+	cfg, err := config.LoadDefaultConfig(context.TODO(),
 		config.WithRegion(connectionDetails.Region),
 		config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(connectionDetails.AccessKeyId, connectionDetails.SecretAccessKey, "")))
+	if err != nil {
+		slog.Error("Error while loading default config for AWS connection.", "err", err)
+		return err
+	}
 	c := s3.NewFromConfig(cfg)
 	awsClient.s3Client = c
 	awsClient.s3PresignClient = s3.NewPresignClient(c)
 	awsClient.connectionDetails = connectionDetails
+	return nil
 }
 
 func (awsClient *AWSClient) GetBucketName() string {
@@ -71,19 +76,19 @@ func (awsClient *AWSClient) ListBucketContent() {
 	if err != nil {
 		log.Fatal(err)
 	}
-
+	slog.Info("Bucket content:")
 	for _, object := range output.Contents {
-		log.Printf("key=%s size=%d", aws.ToString(object.Key), *object.Size)
+		slog.Info(fmt.Sprintf("key=%s size=%d", aws.ToString(object.Key), *object.Size))
 	}
 }
 
-func (awsClient *AWSClient) GetPresignURL(awsObjectKey string) (string, error) {
+func (awsClient *AWSClient) GetPresignedURL(awsObjectKey string) (string, error) {
 	presignedUrl, err := awsClient.s3PresignClient.PresignGetObject(context.Background(),
 		&s3.GetObjectInput{
 			Bucket: aws.String(awsClient.connectionDetails.BucketName),
 			Key:    aws.String(awsObjectKey),
 		},
-		s3.WithPresignExpires(time.Minute*60))
+		s3.WithPresignExpires(time.Hour*6))
 	if err != nil {
 		return "", err
 	}
@@ -99,9 +104,9 @@ func (awsClient *AWSClient) GetFileContent(awsObjectKey string) (string, error) 
 	if err != nil {
 		var noKey *types.NoSuchKey
 		if errors.As(err, &noKey) {
-			log.Printf("Can't get object %s from bucket %s. No such key existing.\n", awsObjectKey, awsClient.connectionDetails.BucketName)
+			slog.Warn("Can't get object from bucket. No such key existing", "awsObjectKey", awsObjectKey, "bucketName", awsClient.connectionDetails.BucketName)
 		} else {
-			log.Printf("Couldn't get object %v:%v. Reason: %v\n", awsClient.connectionDetails.BucketName, awsObjectKey, err)
+			slog.Warn("Couldn't get object from external storage", "awsObjectKey", awsObjectKey, "bucketName", awsClient.connectionDetails.BucketName, "err", err)
 		}
 		return "", err
 	}
@@ -109,7 +114,7 @@ func (awsClient *AWSClient) GetFileContent(awsObjectKey string) (string, error) 
 
 	body, err := io.ReadAll(result.Body)
 	if err != nil {
-		log.Printf("Couldn't read object body from %v. Reason: %v\n", awsObjectKey, err)
+		slog.Warn("Couldn't read object from body", "awsObjectKey", awsObjectKey, "bucketName", awsClient.connectionDetails.BucketName, "err", err)
 		return "", err
 	}
 	return string(body), nil

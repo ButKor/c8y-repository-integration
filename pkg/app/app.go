@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"log/slog"
@@ -128,10 +129,38 @@ func syncSubscriptionsWithTenantControllersPeriodically(c *c8y.Client, estClient
 	}
 }
 
-func Test(application *microservice.Microservice) est.ExternalStorageClient {
-	awsClient := &est.AWSClient{}
-	awsClient.Init(application.WithServiceUser(application.Client.TenantName), application.Client)
-	return awsClient
+func CreateStorageClientFromTenantOptions(application *microservice.Microservice) (est.ExternalStorageClient, error) {
+	ctx := application.WithServiceUser(application.Client.TenantName)
+	c8yClient := application.Client
+	sProviderOptionCategory := "repoIntegrationFirmware"
+	sProviderOptionKey := "storageProvider"
+	storageProvider, _, err := c8yClient.TenantOptions.GetOption(ctx, sProviderOptionCategory, sProviderOptionKey)
+	if err != nil {
+		slog.Error(fmt.Sprintf("Could not read required storageProvider tenant option (category=%s, key=%s)", sProviderOptionCategory, sProviderOptionKey), "err", err)
+		return nil, err
+	}
+
+	switch storageProvider.Value {
+	case "awsS3":
+		slog.Info("Detected desired storage account to be awsS3. Initializing client...")
+		awsClient := &est.AWSClient{}
+		if err := awsClient.Init(ctx, c8yClient); err != nil {
+			slog.Error("Fatal problem while initializing AWS client", "err", err)
+			return nil, err
+		}
+		return awsClient, nil
+	case "azblob":
+		slog.Info("Detected desired storage account to be azblob. Initializing client...")
+		azClient := &est.AzClient{}
+		if err := azClient.Init(ctx, c8yClient); err != nil {
+			slog.Error("Fatal problem while initializing Azure client", "err", err)
+			return nil, err
+		}
+		return azClient, nil
+	default:
+		slog.Error("Storage provider not supported", "err", err)
+		return nil, errors.New("provided none or an unsupported storage provider. Make sure the tenant options align with documentation")
+	}
 }
 
 // Run starts the microservice
@@ -144,16 +173,13 @@ func (a *App) Run() {
 	serviceBaseUrl := bUrl.Scheme + "://" + bUrl.Hostname() + "/service/" + application.Application.ContextPath
 	slog.Info("Service BaseURL", "url", serviceBaseUrl)
 
-	// create clients
-	// awsClient := est.NewClient(application.WithServiceUser(application.Client.TenantName), application.Client, "repo-integration-fw", "awsConnectionDetails")
-
-	// azClient := az.NewClient(application.WithServiceUser(application.Client.TenantName), application.Client, "repo-integration-fw", "azureConnectionDetails")
-	// fmt.Println(azClient)
-
-	estClient := Test(application)
+	estClient, err := CreateStorageClientFromTenantOptions(application)
+	if err != nil {
+		slog.Error("Error while initiating the connection to the external storage. This is a fatal error, exiting in 10 seconds...", "error", err)
+		time.Sleep(time.Second * 10)
+		os.Exit(1)
+	}
 	estClient.ListBucketContent()
-
-	// est.ListBucketContent(awsClient)
 
 	// init Firmware Controllers
 	tenantFwControllers := FirmwareTenantControllers{

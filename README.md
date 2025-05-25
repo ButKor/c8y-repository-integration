@@ -10,7 +10,9 @@ A repository to integrate the Cumulocity Firmware Repository with an AWS storage
 
 * It exposes an endpoint to download the firmware images. 
 
-See below sequence diagram for details:
+# Sequence Diagram 
+
+See below sequence diagram to get an overview how the service works:
 
 ```mermaid
 sequenceDiagram
@@ -48,16 +50,95 @@ sequenceDiagram
     D -->> CC: Log success/failure of firmware update
 ```
 
-# Configuration
+# Service Configuration
 
 Service can be configured with the below tenant options:
 
-Category | Key | Value
---|--|--|
-repo-integration-fw | awsConnectionDetails | '{"region": "{aws region}", "secretAccessKey": "{aws access secret}", "accessKeyID": "{aws access key}", "bucketName": "{bucket name}" }'
+Category | Key | Value | Note
+--|--|--|--|
+repoIntegrationFirmware | storageProvider |  | Supported values: `awsS3`, `azblob`. Datatype string. |
+repoIntegrationFirmware | awsS3ConnectionDetails | '{"region": "\<aws region\>", "secretAccessKey": "\<aws access secret\>", "accessKeyID": "\<aws access key\>", "bucketName": "\<bucket name\>" }' | Mandatory if storageProvider = `awsS3`. Value is a stringified JSON. |
+repoIntegrationFirmware | azBlobConnectionDetails | '{"connectionString": "\<Connection string of your azure storage container\>", "containerName": "\<container name\>" }' | Mandatory if storageProvider = `azblob`. Value is a stringified JSON. |
+
+# Upload a new Firmware to your storage account
+
+For checking the available Firmware Versions, the Service expects two Files to be present in the root of your referenced storage solution:
+
+* `c8y-firmware-info.json`:
+
+```text
+Filename: c8y-firmware-info.json
+About: In this file you're describing details about each firmware (not the version) using the fields:
+* name: The name of your firmware. Mandatory.
+* description: A description about your firmware. Mandatory.
+* deviceType: The deviceType of your Cumulocity Devices where this firmware is applicable to. Optional.
+
+File Content (sample):
+------------------------
+{"name": "my firmware 1", "description": "My firmware 1 description", "deviceType": "thin-edge.io"}
+{"name": "my firmware 2", "description": "My firmware 2 description", "deviceType": "thin-edge.io"}
+{"name": "my firmware 3", "description": "My firmware 3 description"}
+```
+
+* `c8y-firmware-version.json`:
+
+```text
+Filename: c8y-firmware-version.json
+About: In this file you're describing details about each firmware version using the fields:
+* key: the location inside your external storage solution. Mandatory.
+* name: the firmware name of this version (correlates with the name field of c8y-firmware-info.json). Mandatory.
+* version: the firmware version. Mandatory.
+
+File Content (sample):
+------------------------
+{"key": "my-first-firmware.zip", "name": "my firmware 1", "version": "1.0.1"}
+{"key": "my-first-firmware.zip", "name": "my firmware 1", "version": "1.0.2"}
+{"key": "my-second-firmware.zip", "name": "my firmware 2", "version": "1.0.1"}
+{"key": "my-folder-1/my-third-firmware.zip", "name": "my firmware 3", "version": "1.0.1"}
+```
+
+The Microservice periodically checks these two files. Once they changed it is starting the synchronization towards Cumulocity. The firmware object in Cumulocity will have the fragment `externalResourceOrigin`, the `c8y_Firmware.url` field will be a link towards this Microservice with `id` being the Managed Object ID of the Firmware object. Example:
+
+```json
+{
+  "c8y_Firmware": {
+    "url": "https://kb.latest.stage.c8y.io/service/c8y-repo-int/firmware/download?id=9963218",
+    "version": "1.0.1"
+  },
+  "creationTime": "2025-05-25T07:25:20.015Z",
+  "externalResourceOrigin": {
+    "container": "my-firmware-blob",
+    "objectKey": "my-first-firmware.zip",
+    "provider": "azblob"
+  },
+  "id": "9963218",
+  "lastUpdated": "2025-05-25T07:25:20.110Z",
+  "name": "my firmware 1",
+  "owner": "service_c8y-repo-int",
+  "type": "c8y_FirmwareBinary"
+}
+```
+
+![Uploaded firmware](docs/imgs/uploaded-firmware.png "Uploaded firmware")
+
+# Download File
+
+Each synchronized firmware version has a URL that points towards this Microservice (this is the URL that also Devices will receive). To download the file, the client/device needs to send a GET to this auto-generated URL, e.g.:
+
+* via curl (with basic auth):
+```sh
+$ curl -sL -u '${cumulocityTenantId}/${CumulocityUserName}:${CumulocityPassword}' -X 'GET' 'http://localhost:8080/firmware/download?id=9963218'
+```
+
+* via curl (with OAI token): 
+```sh
+$ curl -k -H 'Authorization: Bearer ${CumulocityOAIToken}' -X 'GET' 'http://localhost:8080/firmware/download?id=9963218'
+```
+
+* via thin-edge: TODO
 
 # Next steps
 
-* Supporting Azure Blob storage
+* Supporting firmware patches (for now, create a new version for patching)
 
-* Next to firmware, also support software-repository
+* Next to firmware-, also support software-repository

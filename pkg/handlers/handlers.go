@@ -81,7 +81,7 @@ func GeneratePresignedUrl(ctx context.Context, c8yClient *c8y.Client, moid strin
 		}
 	}
 	// generate presigned URL
-	presignedUrl, err := (*estClient).GetPresignURL(objectKey)
+	presignedUrl, err := (*estClient).GetPresignedURL(objectKey)
 	if err != nil {
 		slog.Error("Error while generating presigned URL for objectKey", "objectKey", objectKey, "err", err.Error())
 		return "", http.StatusInternalServerError, map[string]any{
