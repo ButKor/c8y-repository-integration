@@ -129,7 +129,3 @@ Service runs in multi-tenancy mode by default. This enables you having a "multi-
 * Supporting firmware patches (for now, create a new version for patching)
 
 * Next to firmware-, also support software-repository
-
-# Known issues
-
-Currently there are no issues known. Once you find any, please create a Github issue in this project.
