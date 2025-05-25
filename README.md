@@ -6,7 +6,7 @@ A repository to integrate the Cumulocity Firmware Repository with an AWS storage
 
 * It exposes an endpoint to download the firmware images. The devices sending their requests to the Cumulocity Microservice, which redirects the request to a (presigned) URL to the external solution.
 
-![Overview](docs/imgs/overview.png "Overview")
+<img src="docs/imgs/overview.png" width="500">
 
 # Sequence Diagram 
 
