@@ -120,8 +120,12 @@ $ curl -k -o "YourfileName.zip" -H 'Authorization: Bearer ${CumulocityOAIToken}'
 $ tedge http get "/c8y/service/dm-repo-integration/firmware/download?id=9963218" > YourFileName.zip
 ```
 
-# Next steps
+# Roadmap
 
 * Supporting firmware patches (for now, create a new version for patching)
 
 * Next to firmware-, also support software-repository
+
+# Known issues
+
+Currently there are no issues known. Once you find any, please create a Github issue in this project.
