@@ -56,7 +56,7 @@ Service can be configured with the below tenant options:
 
 Category | Key | Value | Note
 --|--|--|--|
-repoIntegrationFirmware | storageProvider |  | Supported values: `awsS3`, `azblob`. Datatype string. |
+repoIntegrationFirmware | storageProvider | "awsS3" or "azblob" | Supported values: `awsS3`, `azblob`. Datatype string. |
 repoIntegrationFirmware | awsS3ConnectionDetails | '{"region": "\<aws region\>", "secretAccessKey": "\<aws access secret\>", "accessKeyID": "\<aws access key\>", "bucketName": "\<bucket name\>" }' | Mandatory if storageProvider = `awsS3`. Value is a stringified JSON. |
 repoIntegrationFirmware | azBlobConnectionDetails | '{"connectionString": "\<Connection string of your azure storage container\>", "containerName": "\<container name\>" }' | Mandatory if storageProvider = `azblob`. Value is a stringified JSON. |
 
