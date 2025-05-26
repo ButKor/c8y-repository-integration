@@ -92,7 +92,7 @@ func NewApp() *App {
 	return app
 }
 
-func syncSubscriptionsWithTenantControllers(c *c8y.Client, estClient *est.ExternalStorageClient, fwControllers *FirmwareTenantControllers, serviceBaseUrl string) {
+func syncSubscriptionsWithTenantControllers(c *c8y.Client, estClient *est.ExternalStorageClient, fwControllers *FirmwareTenantControllers, ctxPath string) {
 	subscriptions, _, _ := c.Application.GetCurrentApplicationSubscriptions(c.Context.BootstrapUserFromEnvironment())
 	for _, user := range subscriptions.Users {
 		tenant := user.Tenant
@@ -105,6 +105,11 @@ func syncSubscriptionsWithTenantControllers(c *c8y.Client, estClient *est.Extern
 			slog.Info("Controller already existing for tenant", "tenant", tenant)
 			continue
 		}
+		currentTenant, _, err := c.Tenant.GetCurrentTenant(c.Context.ServiceUserContext(tenant, false))
+		if err != nil {
+			slog.Warn("Error while invoking /tenant/currentTenant. Skipping this tenant subscription", "err", err, "tenant", tenant)
+		}
+		domainName := currentTenant.DomainName
 		// firmware controller for tenant does not exist, create and register it
 		fc := FirmwareTenantController{
 			tenantStore: &FirmwareTenantStore{
@@ -115,16 +120,16 @@ func syncSubscriptionsWithTenantControllers(c *c8y.Client, estClient *est.Extern
 			c8yClient:      c,
 			estClient:      estClient,
 			tenantId:       tenant,
-			serviceBaseUrl: serviceBaseUrl,
+			serviceBaseUrl: "https://" + domainName + "/service/" + ctxPath,
 		}
 		fwControllers.Register(fc)
 		fwControllers.SyncTenantsWithIndexFiles([]string{tenant})
 	}
 }
 
-func syncSubscriptionsWithTenantControllersPeriodically(c *c8y.Client, estClient *est.ExternalStorageClient, fwControllers *FirmwareTenantControllers, serviceBaseUrl string) {
+func syncSubscriptionsWithTenantControllersPeriodically(c *c8y.Client, estClient *est.ExternalStorageClient, fwControllers *FirmwareTenantControllers, ctxPath string) {
 	for {
-		syncSubscriptionsWithTenantControllers(c, estClient, fwControllers, serviceBaseUrl)
+		syncSubscriptionsWithTenantControllers(c, estClient, fwControllers, ctxPath)
 		time.Sleep(60 * time.Second)
 	}
 }
@@ -170,8 +175,7 @@ func (a *App) Run() {
 
 	slog.Info("Tenant Info", "tenant", application.Client.TenantName)
 	bUrl := application.Client.BaseURL
-	serviceBaseUrl := bUrl.Scheme + "://" + bUrl.Hostname() + "/service/" + application.Application.ContextPath
-	slog.Info("Service BaseURL", "url", serviceBaseUrl)
+	slog.Info("Service BaseURL", "url", bUrl.Scheme+"://"+bUrl.Hostname()+"/service/"+application.Application.ContextPath)
 
 	estClient, err := CreateStorageClientFromTenantOptions(application)
 	if err != nil {
@@ -186,9 +190,9 @@ func (a *App) Run() {
 		tenantControllers: make(map[string]FirmwareTenantController),
 	}
 	// check registered tenants, create a Firmware Controller for each of them
-	syncSubscriptionsWithTenantControllers(application.Client, &estClient, &tenantFwControllers, serviceBaseUrl)
+	syncSubscriptionsWithTenantControllers(application.Client, &estClient, &tenantFwControllers, application.Application.ContextPath)
 	// Start routine to periodically check for tenant subscriptions and add Firmware Controller for Each
-	go syncSubscriptionsWithTenantControllersPeriodically(application.Client, &estClient, &tenantFwControllers, serviceBaseUrl)
+	go syncSubscriptionsWithTenantControllersPeriodically(application.Client, &estClient, &tenantFwControllers, application.Application.ContextPath)
 	// let firmware controller observe external storage
 	// TODO make this configurable
 	go tenantFwControllers.AutoObserve(600)
