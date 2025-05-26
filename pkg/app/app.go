@@ -191,7 +191,7 @@ func (a *App) Run() {
 	go syncSubscriptionsWithTenantControllersPeriodically(application.Client, &estClient, &tenantFwControllers, serviceBaseUrl)
 	// let firmware controller observe external storage
 	// TODO make this configurable
-	go tenantFwControllers.AutoObserve(90)
+	go tenantFwControllers.AutoObserve(600)
 
 	// now start webserver
 	if a.echoServer == nil {
