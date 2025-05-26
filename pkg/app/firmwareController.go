@@ -84,10 +84,6 @@ func newFirmwareVersion(name string, version string, url string, provider string
 }
 
 func (c *FirmwareTenantController) SyncWithIndexFiles(extFwVersionEntries []ExtFirmwareVersionEntry, extFwInfoEntries map[string]ExtFirmwareInfoEntry, inputHash string) {
-	if c.lastKnownInputHash == inputHash {
-		slog.Info("Input Hash did not change since last run, skipping synchronization for tenant", "tenant", c.tenantId, "inputHash", inputHash)
-		return
-	}
 	c.rebuildTenantStore()
 	syncExtFwVersionEntriesWithCumulocity(c, extFwVersionEntries, extFwInfoEntries)
 	syncCumulocityWithextFwVersionEntries(c, extFwVersionEntries)
