@@ -46,9 +46,9 @@ func (c *FirmwareTenantControllers) Get(tenantId string) (FirmwareTenantControll
 func (c *FirmwareTenantControllers) AutoObserve(intervalMins int) {
 	slog.Info("Auto Observing started")
 	for {
+		time.Sleep(time.Duration(intervalMins) * time.Minute)
 		slog.Info("Start synchronization for all tenants")
 		c.SyncAllRegisteredTenantsWithIndexFiles()
-		time.Sleep(time.Duration(intervalMins) * time.Minute)
 	}
 
 }
