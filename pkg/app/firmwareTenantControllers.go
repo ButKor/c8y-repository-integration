@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	est "github.com/kobu/dm-repo-integration/pkg/externalstorage"
+	est "github.com/kobu/c8y-devmgmt-repo-intgr/pkg/externalstorage"
 )
 
 type ExtFirmwareInfoEntry struct {
@@ -26,9 +26,9 @@ type ExtFirmwareVersionEntry struct {
 }
 
 type FirmwareTenantControllers struct {
-	tenantControllers  map[string]FirmwareTenantController
-	estClient          est.ExternalStorageClient
-	lastKnownInputHash string
+	tenantControllers map[string]FirmwareTenantController
+	estClient         est.ExternalStorageClient
+	//lastKnownInputHash string
 }
 
 func (c *FirmwareTenantControllers) Register(fc FirmwareTenantController) {
@@ -43,20 +43,19 @@ func (c *FirmwareTenantControllers) Get(tenantId string) (FirmwareTenantControll
 	return val, ok
 }
 
-func (c *FirmwareTenantControllers) AutoObserve(intervalSecs int) {
-	go func() {
-		for {
-			c.SyncAllRegisteredTenantsWithIndexFiles()
-			time.Sleep(time.Duration(intervalSecs) * time.Second)
-		}
-	}()
+func (c *FirmwareTenantControllers) AutoObserve(intervalMins int) {
+	for {
+		c.SyncAllRegisteredTenantsWithIndexFiles()
+		time.Sleep(time.Duration(intervalMins) * time.Minute)
+	}
+
 }
 
 func (c *FirmwareTenantControllers) SyncAllRegisteredTenantsWithIndexFiles() {
-	c.SyncTenantsWithIndexFiles(slices.Collect(maps.Keys(c.tenantControllers)), false)
+	c.SyncTenantsWithIndexFiles(slices.Collect(maps.Keys(c.tenantControllers)))
 }
 
-func (c *FirmwareTenantControllers) SyncTenantsWithIndexFiles(tenantIds []string, enforceSync bool) {
+func (c *FirmwareTenantControllers) SyncTenantsWithIndexFiles(tenantIds []string) {
 	contentFwVersionFile := c.ReadExtFileContentsAsString("c8y-firmware-versions.json")
 	if len(contentFwVersionFile) == 0 {
 		slog.Error("Firmware Version Info file (c8y-firmware-versions.json) could not be read or is empty. Service stops syncing attempt.")
@@ -68,13 +67,8 @@ func (c *FirmwareTenantControllers) SyncTenantsWithIndexFiles(tenantIds []string
 		return
 	}
 	inputHash := GetMD5Hash(contentFwVersionFile) + GetMD5Hash(contentFwVersionFile)
+	slog.Info("Read Index Files. Input Hash = " + inputHash)
 
-	if inputHash == c.lastKnownInputHash && !enforceSync {
-		slog.Info("No change in input files, nothing to do here.", "inputHash", inputHash, "lastKnownHash", c.lastKnownInputHash, "enforceSync", enforceSync)
-		return
-	}
-
-	slog.Info("Hashes for Input Files differing between current run and last run. Parsing the external files now")
 	fwVersionEntries := ParseExtFwVersionContents(contentFwVersionFile)
 	fwInfoEntries := ParseExtFwInfoContents(contentFwInfoFile)
 
@@ -85,9 +79,8 @@ func (c *FirmwareTenantControllers) SyncTenantsWithIndexFiles(tenantIds []string
 			slog.Warn("No Firmware Controller found for Tenant. Skipping this tenant.", "tenantId", e)
 			continue
 		}
-		val.ExternalStorageIndexChanged(fwVersionEntries, fwInfoEntries, enforceSync)
+		val.SyncWithIndexFiles(fwVersionEntries, fwInfoEntries, inputHash)
 	}
-	c.lastKnownInputHash = inputHash
 }
 
 func (c *FirmwareTenantControllers) ReadExtFileContentsAsString(objectKey string) string {

@@ -4,17 +4,18 @@ import (
 	"context"
 	"log/slog"
 
-	est "github.com/kobu/dm-repo-integration/pkg/externalstorage"
+	est "github.com/kobu/c8y-devmgmt-repo-intgr/pkg/externalstorage"
 	"github.com/reubenmiller/go-c8y/pkg/c8y"
 )
 
 type FirmwareTenantController struct {
-	tenantId       string
-	tenantStore    *FirmwareTenantStore
-	ctx            context.Context
-	c8yClient      *c8y.Client
-	estClient      *est.ExternalStorageClient
-	serviceBaseUrl string
+	tenantId           string
+	tenantStore        *FirmwareTenantStore
+	ctx                context.Context
+	c8yClient          *c8y.Client
+	estClient          *est.ExternalStorageClient
+	serviceBaseUrl     string
+	lastKnownInputHash string
 }
 
 type ExternalResourceOrigin struct {
@@ -46,7 +47,7 @@ type Firmware struct {
 	Origin      *ExternalResourceOrigin `json:"externalResourceOrigin,omitempty"`
 }
 
-func NewFirmware(name string, fwInfo ExtFirmwareInfoEntry, provider string, bucketName string, objectKey string) *Firmware {
+func newFirmware(name string, fwInfo ExtFirmwareInfoEntry, provider string, bucketName string, objectKey string) *Firmware {
 	res := &Firmware{
 		ManagedObject: c8y.ManagedObject{
 			Name: name,
@@ -64,7 +65,7 @@ func NewFirmware(name string, fwInfo ExtFirmwareInfoEntry, provider string, buck
 	return res
 }
 
-func NewFirmwareVersion(name string, version string, url string, provider string, bucketName string, objectKey string) FirmwareVersion {
+func newFirmwareVersion(name string, version string, url string, provider string, bucketName string, objectKey string) FirmwareVersion {
 	return FirmwareVersion{
 		ManagedObject: c8y.ManagedObject{
 			Name: name,
@@ -82,10 +83,14 @@ func NewFirmwareVersion(name string, version string, url string, provider string
 	}
 }
 
-func (c *FirmwareTenantController) ExternalStorageIndexChanged(extFwVersionEntries []ExtFirmwareVersionEntry, extFwInfoEntries map[string]ExtFirmwareInfoEntry, enforceSync bool) {
+func (c *FirmwareTenantController) SyncWithIndexFiles(extFwVersionEntries []ExtFirmwareVersionEntry, extFwInfoEntries map[string]ExtFirmwareInfoEntry, inputHash string) {
+	if c.lastKnownInputHash == inputHash {
+		return
+	}
 	c.rebuildTenantStore()
 	syncExtFwVersionEntriesWithCumulocity(c, extFwVersionEntries, extFwInfoEntries)
 	syncCumulocityWithextFwVersionEntries(c, extFwVersionEntries)
+	c.lastKnownInputHash = inputHash
 }
 
 // run over the index entries (from ext. storage) and check if they are all existing. If no, create it in Cumulocity
@@ -114,7 +119,7 @@ func syncExtFwVersionEntriesWithCumulocity(controller *FirmwareTenantController,
 func createFirmware(controller *FirmwareTenantController, extFwVersionEntry ExtFirmwareVersionEntry, extFwInfoEntry ExtFirmwareInfoEntry, updateTenantStore bool) (string, error) {
 	estClient := *controller.estClient
 	createdFirmware, _, fwErr := controller.c8yClient.Inventory.Create(controller.ctx,
-		NewFirmware(extFwVersionEntry.Name, extFwInfoEntry, estClient.GetProviderName(), estClient.GetBucketName(), extFwVersionEntry.Key))
+		newFirmware(extFwVersionEntry.Name, extFwInfoEntry, estClient.GetProviderName(), estClient.GetBucketName(), extFwVersionEntry.Key))
 	if fwErr != nil {
 		return "", fwErr
 	}
@@ -135,7 +140,7 @@ func createAndReferenceFirmwareVersion(controller *FirmwareTenantController, fwM
 	estClient := *controller.estClient
 	createdFwVersion, _, fwCreateErr := controller.c8yClient.Inventory.Create(
 		controller.ctx,
-		NewFirmwareVersion(name, version, "http://to-be-provided.org", estClient.GetProviderName(), estClient.GetBucketName(), objectKey))
+		newFirmwareVersion(name, version, "http://to-be-provided.org", estClient.GetProviderName(), estClient.GetBucketName(), objectKey))
 	if fwCreateErr != nil {
 		slog.Error("Error while creating Firmware version. Skipping this iteration.", "error", fwCreateErr.Error())
 		return

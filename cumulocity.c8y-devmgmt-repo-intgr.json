@@ -1,6 +1,6 @@
 {
     "apiVersion": "v2",
-    "name": "dm-repo-integration",
+    "name": "c8y-devmgmt-repo-intgr",
     "version": "0.0.2",
     "provider": {
       "name": "Korbinian Butz",
@@ -14,14 +14,6 @@
       "ROLE_INVENTORY_READ",
       "ROLE_INVENTORY_CREATE",
       "ROLE_INVENTORY_ADMIN",
-      "ROLE_IDENTITY_READ",
-      "ROLE_IDENTITY_ADMIN",
-      "ROLE_USER_MANAGEMENT_READ",
-      "ROLE_AUDIT_READ",
-      "ROLE_AUDIT_ADMIN",
-      "ROLE_EVENT_READ",
-      "ROLE_EVENT_ADMIN",
-      "ROLE_TENANT_ADMIN",
       "ROLE_OPTION_MANAGEMENT_READ"
     ],
     "roles": [],

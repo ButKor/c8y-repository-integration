@@ -5,9 +5,9 @@ import (
 	"log/slog"
 	"net/http"
 
-	"github.com/kobu/dm-repo-integration/internal/model"
-	"github.com/kobu/dm-repo-integration/pkg/c8yauth"
-	est "github.com/kobu/dm-repo-integration/pkg/externalstorage"
+	"github.com/kobu/c8y-devmgmt-repo-intgr/internal/model"
+	"github.com/kobu/c8y-devmgmt-repo-intgr/pkg/c8yauth"
+	est "github.com/kobu/c8y-devmgmt-repo-intgr/pkg/externalstorage"
 	"github.com/labstack/echo/v4"
 	"github.com/reubenmiller/go-c8y/pkg/c8y"
 )
@@ -94,3 +94,11 @@ func GeneratePresignedUrl(ctx context.Context, c8yClient *c8y.Client, moid strin
 		"url": presignedUrl,
 	}
 }
+
+// urlExpirationMins := s.TOPT_FW_URL_EXPIRATION_MINS_DEFAULTVALUE
+// 	opt, _, err := c8yClient.TenantOptions.GetOption(ctx, s.TOPT_CATEGORY, s.TOPT_FW_URL_EXPIRATION_MINS)
+// 	if err == nil {
+// 		if o, e := strconv.Atoi(opt.Value); e == nil {
+// 			urlExpirationMins = o
+// 		}
+// 	}

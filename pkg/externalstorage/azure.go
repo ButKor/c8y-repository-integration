@@ -21,6 +21,7 @@ type AzClient struct {
 	azBlobClient      *azblob.Client
 	azContainerClient *container.Client
 	ConnectionDetails AzConnectionDetails
+	urlExpirationMins int
 }
 
 type AzConnectionDetails struct {
@@ -28,9 +29,7 @@ type AzConnectionDetails struct {
 	ContainerName    string `json:"containerName"`
 }
 
-func (azureClient *AzClient) Init(ctx context.Context, client *c8y.Client) error {
-	tenantOptionCategory := "repoIntegrationFirmware"
-	tenantOptionKey := "azblobConnectionDetails"
+func (azureClient *AzClient) Init(ctx context.Context, client *c8y.Client, tenantOptionCategory string, tenantOptionKey string, urlExpirationMins int) error {
 	tenantOptionConnectionDetails, _, e := client.TenantOptions.GetOption(ctx, tenantOptionCategory, tenantOptionKey)
 	if e != nil {
 		slog.Error("Azure Credentials were not found in tenant options. Make sure a tenant option for category="+tenantOptionCategory+" and key="+tenantOptionKey+" exists and your service has READ access to tenant option. ", "err", e)
@@ -51,6 +50,7 @@ func (azureClient *AzClient) Init(ctx context.Context, client *c8y.Client) error
 	}
 
 	azureClient.ConnectionDetails = connectionDetails
+	azureClient.urlExpirationMins = urlExpirationMins
 	azureClient.azBlobClient, err = azblob.NewClientFromConnectionString(connectionDetails.ConnectionString, nil)
 	if err != nil {
 		slog.Error("Error while creating Azure Client from connection string. Make sure the connection string is set properly", "err", e)
@@ -90,7 +90,7 @@ func (azClient *AzClient) GetPresignedURL(azObjectFileName string) (string, erro
 	start := time.Now()
 	sasurl, err := cc.NewBlobClient(azObjectFileName).GetSASURL(
 		sas.BlobPermissions{Read: true},
-		start.Add(time.Hour*6),
+		start.Add(time.Minute*time.Duration(azClient.urlExpirationMins)),
 		&blob.GetSASURLOptions{
 			StartTime: &start,
 		},

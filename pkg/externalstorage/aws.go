@@ -22,6 +22,7 @@ type AWSClient struct {
 	s3Client          *s3.Client
 	s3PresignClient   *s3.PresignClient
 	connectionDetails AwsConnectionDetails
+	urlExpirationMins int
 }
 
 type AwsConnectionDetails struct {
@@ -31,9 +32,7 @@ type AwsConnectionDetails struct {
 	Region          string `json:"region"`
 }
 
-func (awsClient *AWSClient) Init(ctx context.Context, client *c8y.Client) error {
-	tenantOptionCategory := "repoIntegrationFirmware"
-	tenantOptionKey := "awsS3ConnectionDetails"
+func (awsClient *AWSClient) Init(ctx context.Context, client *c8y.Client, tenantOptionCategory string, tenantOptionKey string, urlExpirationMins int) error {
 	tenantOptionConnectionDetails, _, e := client.TenantOptions.GetOption(ctx, tenantOptionCategory, tenantOptionKey)
 	if e != nil {
 		slog.Error("AWS Credentials were not found in tenant options. Make sure a tenant option for category="+tenantOptionCategory+" and key="+tenantOptionKey+" exists and your service has READ access to tenant option. ", "err", e)
@@ -57,6 +56,7 @@ func (awsClient *AWSClient) Init(ctx context.Context, client *c8y.Client) error 
 	c := s3.NewFromConfig(cfg)
 	awsClient.s3Client = c
 	awsClient.s3PresignClient = s3.NewPresignClient(c)
+	awsClient.urlExpirationMins = urlExpirationMins
 	awsClient.connectionDetails = connectionDetails
 	return nil
 }
@@ -88,7 +88,7 @@ func (awsClient *AWSClient) GetPresignedURL(awsObjectKey string) (string, error)
 			Bucket: aws.String(awsClient.connectionDetails.BucketName),
 			Key:    aws.String(awsObjectKey),
 		},
-		s3.WithPresignExpires(time.Hour*6))
+		s3.WithPresignExpires(time.Minute*time.Duration(awsClient.urlExpirationMins)))
 	if err != nil {
 		return "", err
 	}

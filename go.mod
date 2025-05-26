@@ -1,4 +1,4 @@
-module github.com/kobu/dm-repo-integration
+module github.com/kobu/c8y-devmgmt-repo-intgr
 
 require (
 	github.com/aws/aws-sdk-go-v2 v1.36.3

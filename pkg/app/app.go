@@ -9,14 +9,16 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/hashicorp/go-retryablehttp"
-	"github.com/kobu/dm-repo-integration/internal/model"
-	"github.com/kobu/dm-repo-integration/pkg/c8yauth"
-	est "github.com/kobu/dm-repo-integration/pkg/externalstorage"
-	"github.com/kobu/dm-repo-integration/pkg/handlers"
+	"github.com/kobu/c8y-devmgmt-repo-intgr/internal/model"
+	"github.com/kobu/c8y-devmgmt-repo-intgr/pkg/c8yauth"
+	est "github.com/kobu/c8y-devmgmt-repo-intgr/pkg/externalstorage"
+	"github.com/kobu/c8y-devmgmt-repo-intgr/pkg/handlers"
+	s "github.com/kobu/c8y-devmgmt-repo-intgr/pkg/static"
 	"github.com/labstack/echo/v4"
 	"github.com/reubenmiller/go-c8y/pkg/c8y"
 	"github.com/reubenmiller/go-c8y/pkg/microservice"
@@ -128,7 +130,7 @@ func syncSubscriptionsWithTenantControllers(c *c8y.Client, estClient *est.Extern
 			serviceBaseUrl: "https://" + domainName + "/service/" + ctxPath,
 		}
 		fwControllers.Register(fc)
-		fwControllers.SyncTenantsWithIndexFiles([]string{tenant}, true)
+		fwControllers.SyncTenantsWithIndexFiles([]string{tenant})
 	}
 }
 
@@ -142,19 +144,25 @@ func syncSubscriptionsWithTenantControllersPeriodically(c *c8y.Client, estClient
 func CreateStorageClientFromTenantOptions(application *microservice.Microservice) (est.ExternalStorageClient, error) {
 	ctx := application.WithServiceUser(application.Client.TenantName)
 	c8yClient := application.Client
-	sProviderOptionCategory := "repoIntegrationFirmware"
-	sProviderOptionKey := "storageProvider"
-	storageProvider, _, err := c8yClient.TenantOptions.GetOption(ctx, sProviderOptionCategory, sProviderOptionKey)
+	storageProvider, _, err := c8yClient.TenantOptions.GetOption(ctx, s.TOPT_CATEGORY, s.TOPT_FW_STORAGE_PROVIDER_KEY)
 	if err != nil {
-		slog.Error(fmt.Sprintf("Could not read required storageProvider tenant option (category=%s, key=%s)", sProviderOptionCategory, sProviderOptionKey), "err", err)
+		slog.Error(fmt.Sprintf("Could not read required storageProvider tenant option (category=%s, key=%s)", s.TOPT_CATEGORY, s.TOPT_FW_STORAGE_PROVIDER_KEY), "err", err)
 		return nil, err
+	}
+
+	urlExpirationMins := s.TOPT_FW_URL_EXPIRATION_MINS_DEFAULTVALUE
+	opt, _, err := c8yClient.TenantOptions.GetOption(ctx, s.TOPT_CATEGORY, s.TOPT_FW_URL_EXPIRATION_MINS)
+	if err == nil {
+		if o, e := strconv.Atoi(opt.Value); e == nil {
+			urlExpirationMins = o
+		}
 	}
 
 	switch storageProvider.Value {
 	case "awsS3":
 		slog.Info("Detected desired storage account to be awsS3. Initializing client...")
 		awsClient := &est.AWSClient{}
-		if err := awsClient.Init(ctx, c8yClient); err != nil {
+		if err := awsClient.Init(ctx, c8yClient, s.TOPT_CATEGORY, s.TOPT_FW_AWS_CONNECTION_KEY, urlExpirationMins); err != nil {
 			slog.Error("Fatal problem while initializing AWS client", "err", err)
 			return nil, err
 		}
@@ -162,7 +170,7 @@ func CreateStorageClientFromTenantOptions(application *microservice.Microservice
 	case "azblob":
 		slog.Info("Detected desired storage account to be azblob. Initializing client...")
 		azClient := &est.AzClient{}
-		if err := azClient.Init(ctx, c8yClient); err != nil {
+		if err := azClient.Init(ctx, c8yClient, s.TOPT_CATEGORY, s.TOPT_FW_AZ_CONNECTION_KEY, urlExpirationMins); err != nil {
 			slog.Error("Fatal problem while initializing Azure client", "err", err)
 			return nil, err
 		}
@@ -171,6 +179,18 @@ func CreateStorageClientFromTenantOptions(application *microservice.Microservice
 		slog.Error("Storage provider not supported", "err", err)
 		return nil, errors.New("provided none or an unsupported storage provider. Make sure the tenant options align with documentation")
 	}
+}
+
+func scheduleAutoObserver(c *c8y.Client, fwControllers *FirmwareTenantControllers) {
+	observeTimeMins := s.TOPT_FW_STORAGE_OBSERVE_INTERVAL_MINS_DEFAULTVALUE
+	opt, _, err := c.TenantOptions.GetOption(c.Context.ServiceUserContext(c.TenantName, false),
+		s.TOPT_CATEGORY, s.TOPT_FW_STORAGE_OBSERVE_INTERVAL_MINS)
+	if err == nil {
+		if o, e := strconv.Atoi(opt.Value); e == nil {
+			observeTimeMins = o
+		}
+	}
+	go fwControllers.AutoObserve(observeTimeMins)
 }
 
 // Run starts the microservice
@@ -199,8 +219,7 @@ func (a *App) Run() {
 	// Start routine to periodically check for tenant subscriptions and add Firmware Controller for Each
 	go syncSubscriptionsWithTenantControllersPeriodically(application.Client, &estClient, &tenantFwControllers, application.Application.ContextPath)
 	// let firmware controller observe external storage
-	// TODO make this configurable
-	go tenantFwControllers.AutoObserve(600)
+	scheduleAutoObserver(application.Client, &tenantFwControllers)
 
 	// now start webserver
 	if a.echoServer == nil {

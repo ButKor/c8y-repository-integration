@@ -54,9 +54,11 @@ Service can be configured with the below tenant options:
 
 Category | Key | Value | Note
 --|--|--|--|
-repoIntegrationFirmware | storageProvider | "awsS3" or "azblob" | Supported values: `awsS3`, `azblob`. Datatype string. |
-repoIntegrationFirmware | credentials.awsS3ConnectionDetails | '{"region": "\<aws region\>", "secretAccessKey": "\<aws access secret\>", "accessKeyID": "\<aws access key\>", "bucketName": "\<bucket name\>" }' | Mandatory if storageProvider = `awsS3`. Value is a stringified JSON. |
-repoIntegrationFirmware | credentials.azBlobConnectionDetails | '{"connectionString": "\<Connection string of your azure storage container\>", "containerName": "\<container name\>" }' | Mandatory if storageProvider = `azblob`. Value is a stringified JSON. |
+c8y-devmgmt-repo-intgr | fwStorageProvider | "awsS3" or "azblob" | Supported values: `awsS3`, `azblob`. Datatype string. |
+c8y-devmgmt-repo-intgr | credentials.fwAwsS3ConnectionDetails | '{"region": "\<aws region\>", "secretAccessKey": "\<aws access secret\>", "accessKeyID": "\<aws access key\>", "bucketName": "\<bucket name\>" }' | Mandatory if fwStorageProvider = `awsS3`. Value is a stringified JSON. |
+c8y-devmgmt-repo-intgr | credentials.fwAzblobConnectionDetails | '{"connectionString": "\<Connection string of your azure storage container\>", "containerName": "\<container name\>" }' | Mandatory if fwStorageProvider = `azblob`. Value is a stringified JSON. |
+c8y-devmgmt-repo-intgr | fwStorageObserveIntervalMins | "5" | The interval in minutes in which the files from external storage are read. Default is 5. Datatype String. |
+c8y-devmgmt-repo-intgr | credentials.fwAzblobConnectionDetails | "180" | The amount of minutes for how long the presigned URLs are valid. Default is 180. Datatype String. |
 
 # Upload a new Firmware to your storage account
 
@@ -105,21 +107,21 @@ Each synchronized firmware version has a URL that points towards this Microservi
 
 * via curl (with basic auth):
 ```sh
-$ curl -sL -o "YourfileName.zip" -u '${cumulocityTenantId}/${CumulocityUserName}:${CumulocityPassword}' -X 'GET' 'https://kb.latest.stage.c8y.io/service/dm-repo-integration/firmware/download?id=9963218'
+$ curl -sL -o "YourfileName.zip" -u '${cumulocityTenantId}/${CumulocityUserName}:${CumulocityPassword}' -X 'GET' 'https://kb.latest.stage.c8y.io/service/c8y-devmgmt-repo-intgr/firmware/download?id=9963218'
 ```
 
 * via curl (with OAI token): 
 ```sh
-$ curl -k -o "YourfileName.zip" -H 'Authorization: Bearer ${CumulocityOAIToken}' -X 'GET' 'https://kb.latest.stage.c8y.io/service/dm-repo-integration/firmware/download?id=9963218'
+$ curl -k -o "YourfileName.zip" -H 'Authorization: Bearer ${CumulocityOAIToken}' -X 'GET' 'https://kb.latest.stage.c8y.io/service/c8y-devmgmt-repo-intgr/firmware/download?id=9963218'
 ```
 
 * via thin-edge using the in-built [Cumulocity Proxy](https://thin-edge.github.io/thin-edge.io/references/cumulocity-proxy/):
 ```sh
 # Either with 'tedge http' command (introduced with thin-edge.io version 1.5.0)
-$ tedge http get "/c8y/service/dm-repo-integration/firmware/download?id=9963218" > YourFileName.zip
+$ tedge http get "/c8y/service/c8y-devmgmt-repo-intgr/firmware/download?id=9963218" > YourFileName.zip
 
 # Or doing a curl against the local proxy
-$ curl -sL -o "YourFileName.zip" "http://127.0.0.1:8001/c8y/service/dm-repo-integration/firmware/download?id=3161253"
+$ curl -sL -o "YourFileName.zip" "http://127.0.0.1:8001/c8y/service/c8y-devmgmt-repo-intgr/firmware/download?id=3161253"
 ```
 
 # Multi-Tenancy

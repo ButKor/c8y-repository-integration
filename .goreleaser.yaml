@@ -7,7 +7,7 @@
 # vim: set ts=2 sw=2 tw=0 fo=cnqoj
 
 version: 2
-project_name: dm-repo-integration
+project_name: c8y-devmgmt-repo-intgr
 
 before:
   hooks:

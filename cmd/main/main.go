@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/kobu/dm-repo-integration/pkg/app"
+	"github.com/kobu/c8y-devmgmt-repo-intgr/pkg/app"
 )
 
 func main() {
