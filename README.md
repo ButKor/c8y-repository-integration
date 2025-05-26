@@ -60,6 +60,8 @@ c8y-devmgmt-repo-intgr | credentials.fwAzblobConnectionDetails | '{"connectionSt
 c8y-devmgmt-repo-intgr | fwStorageObserveIntervalMins | "5" | The interval in minutes in which the files from external storage are read. Default is 5. Datatype String. |
 c8y-devmgmt-repo-intgr | credentials.fwAzblobConnectionDetails | "180" | The amount of minutes for how long the presigned URLs are valid. Default is 180. Datatype String. |
 
+> Configuration Options are loaded on start-up, not during runtime.
+
 # Upload a new Firmware to your storage account
 
 For checking the available Firmware Versions, the Service expects two Files to be present in the root of your referenced storage solution:

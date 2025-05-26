@@ -85,6 +85,7 @@ func newFirmwareVersion(name string, version string, url string, provider string
 
 func (c *FirmwareTenantController) SyncWithIndexFiles(extFwVersionEntries []ExtFirmwareVersionEntry, extFwInfoEntries map[string]ExtFirmwareInfoEntry, inputHash string) {
 	if c.lastKnownInputHash == inputHash {
+		slog.Info("Input Hash did not change since last run, skipping synchronization for tenant", "tenant", c.tenantId, "inputHash", inputHash)
 		return
 	}
 	c.rebuildTenantStore()
@@ -231,6 +232,7 @@ func contains(extFwVersionEntries []ExtFirmwareVersionEntry, storeEntry Firmware
 
 // scans tenants firmware repository and caches it to tenant store
 func (c *FirmwareTenantController) rebuildTenantStore() {
+	slog.Info("Rebuilding Tenant Store", "tenant", c.tenantId)
 	tenantName := c.c8yClient.GetTenantName(c.ctx)
 	// collect all firmware objects
 	cp := 1
