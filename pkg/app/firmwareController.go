@@ -184,6 +184,7 @@ func createAndReferenceFirmwareVersion(controller *FirmwareTenantController, fwM
 
 // run over tenant store and check if they all exist in extFwVersionEntries. Remove from Cumulocity if not.
 func syncCumulocityWithextFwVersionEntries(controller *FirmwareTenantController, extFwVersionEntries []ExtFirmwareVersionEntry) {
+	slog.Info("Start synchronizing C8Y with external storage entries", "tenant", controller.tenantId)
 	for _, versionList := range controller.tenantStore.FirmwareVersionsByName {
 		for _, version := range versionList {
 			if !contains(extFwVersionEntries, version) {
@@ -232,6 +233,7 @@ func contains(extFwVersionEntries []ExtFirmwareVersionEntry, storeEntry Firmware
 
 // scans tenants firmware repository and caches it to tenant store
 func (c *FirmwareTenantController) rebuildTenantStore() {
+	c.tenantStore.Flush()
 	slog.Info("Rebuilding Tenant Store", "tenant", c.tenantId)
 	tenantName := c.c8yClient.GetTenantName(c.ctx)
 	// collect all firmware objects
@@ -280,15 +282,16 @@ func (c *FirmwareTenantController) rebuildTenantStore() {
 					isPatch := ref.Get("managedObject.c8y_Patch").Exists()
 					patchDependency := ref.Get("managedObject.c8y_Patch.dependency").String()
 					fw := FirmwareStoreVersionEntry{
-						TenantId:        tenantName,
-						MoId:            ref.Get("managedObject.id").String(),
-						MoType:          ref.Get("managedObject.type").String(),
-						FwName:          firmwareName,
-						FwMoId:          firmwareId,
-						IsPatch:         isPatch,
-						PatchDependency: patchDependency,
-						Version:         ref.Get("managedObject.c8y_Firmware.version").String(),
-						URL:             ref.Get("managedObject.c8y_Firmware.url").String(),
+						TenantId:          tenantName,
+						MoId:              ref.Get("managedObject.id").String(),
+						MoType:            ref.Get("managedObject.type").String(),
+						FwName:            firmwareName,
+						FwMoId:            firmwareId,
+						IsPatch:           isPatch,
+						PatchDependency:   patchDependency,
+						Version:           ref.Get("managedObject.c8y_Firmware.version").String(),
+						URL:               ref.Get("managedObject.c8y_Firmware.url").String(),
+						HasExternalOrigin: ref.Get("externalResourceOrigin").Exists(),
 					}
 					c.tenantStore.AddFirmwareVersion(fw)
 				}

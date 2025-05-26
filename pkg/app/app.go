@@ -265,6 +265,7 @@ func setDefaultContextHandler(e *echo.Echo, c8yms *microservice.Microservice) {
 		}
 	})
 }
+
 func (a *App) setRouters(estClient *est.ExternalStorageClient) {
 	server := a.echoServer
 	handlers.RegisterFirmwareHandler(server, estClient)

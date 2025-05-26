@@ -15,15 +15,16 @@ type FirmwareStoreFwEntry struct {
 }
 
 type FirmwareStoreVersionEntry struct {
-	TenantId        string `json:"tenantId"`
-	FwName          string `json:"fwName"`
-	FwMoId          string `json:"fwMoId"`
-	MoId            string `json:"moId"`
-	MoType          string `json:"moType"`
-	IsPatch         bool   `json:"isPatch"`
-	PatchDependency string `json:"patchDependency"`
-	Version         string `json:"version"`
-	URL             string `json:"url"`
+	TenantId          string `json:"tenantId"`
+	FwName            string `json:"fwName"`
+	FwMoId            string `json:"fwMoId"`
+	MoId              string `json:"moId"`
+	MoType            string `json:"moType"`
+	IsPatch           bool   `json:"isPatch"`
+	PatchDependency   string `json:"patchDependency"`
+	Version           string `json:"version"`
+	URL               string `json:"url"`
+	HasExternalOrigin bool   `json:"hasExternalOrigin"`
 }
 
 func (store *FirmwareTenantStore) AddFirmware(e FirmwareStoreFwEntry) {
