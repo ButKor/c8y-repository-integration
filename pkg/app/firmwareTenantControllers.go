@@ -44,7 +44,9 @@ func (c *FirmwareTenantControllers) Get(tenantId string) (FirmwareTenantControll
 }
 
 func (c *FirmwareTenantControllers) AutoObserve(intervalMins int) {
+	slog.Info("Auto Observing started")
 	for {
+		slog.Info("Start synchronization for all tenants")
 		c.SyncAllRegisteredTenantsWithIndexFiles()
 		time.Sleep(time.Duration(intervalMins) * time.Minute)
 	}
@@ -56,6 +58,7 @@ func (c *FirmwareTenantControllers) SyncAllRegisteredTenantsWithIndexFiles() {
 }
 
 func (c *FirmwareTenantControllers) SyncTenantsWithIndexFiles(tenantIds []string) {
+	slog.Info("Start synchronization for tenants", "tenantList", tenantIds)
 	contentFwVersionFile := c.ReadExtFileContentsAsString("c8y-firmware-versions.json")
 	if len(contentFwVersionFile) == 0 {
 		slog.Error("Firmware Version Info file (c8y-firmware-versions.json) could not be read or is empty. Service stops syncing attempt.")
@@ -72,7 +75,7 @@ func (c *FirmwareTenantControllers) SyncTenantsWithIndexFiles(tenantIds []string
 	fwVersionEntries := ParseExtFwVersionContents(contentFwVersionFile)
 	fwInfoEntries := ParseExtFwInfoContents(contentFwInfoFile)
 
-	slog.Info("Now apply changes in each tenant")
+	slog.Info("Applying changes in each tenant...")
 	for _, e := range tenantIds {
 		val, ok := c.tenantControllers[e]
 		if !ok {

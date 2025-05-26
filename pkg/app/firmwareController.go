@@ -84,6 +84,7 @@ func newFirmwareVersion(name string, version string, url string, provider string
 }
 
 func (c *FirmwareTenantController) SyncWithIndexFiles(extFwVersionEntries []ExtFirmwareVersionEntry, extFwInfoEntries map[string]ExtFirmwareInfoEntry, inputHash string) {
+	slog.Info("Start synchronization for tenant", "ternantId", c.tenantId)
 	c.rebuildTenantStore()
 	syncExtFwVersionEntriesWithCumulocity(c, extFwVersionEntries, extFwInfoEntries)
 	syncCumulocityWithextFwVersionEntries(c, extFwVersionEntries)
@@ -95,9 +96,11 @@ func syncExtFwVersionEntriesWithCumulocity(controller *FirmwareTenantController,
 	for _, extFwVersionEntry := range extFwVersionEntries {
 		_, vok := controller.tenantStore.GetFirmwareVersion(extFwVersionEntry.Name, extFwVersionEntry.Version)
 		if !vok {
+			slog.Info("Found version missing in tenant", "firmwareName", extFwVersionEntry.Name, "firmwareVersion", extFwVersionEntry.Version)
 			// version not in tenant store, is the firmware itself available?
 			existingFirmware, fok := controller.tenantStore.GetFirmware(extFwVersionEntry.Name)
 			if !fok {
+				slog.Info("Firmware not existing. Create Firmware and Firmware Version", "firmwareName", extFwVersionEntry.Name, "firmwareVersion", extFwVersionEntry.Version)
 				createdFirmwareMoId, fwCreateErr := createFirmware(controller, extFwVersionEntry, extFwInfoEntries[extFwVersionEntry.Name], true)
 				if fwCreateErr != nil {
 					slog.Error("Error while creating Firmware. Skipping this iteration.", "error", fwCreateErr.Error)
@@ -106,6 +109,7 @@ func syncExtFwVersionEntriesWithCumulocity(controller *FirmwareTenantController,
 				// create firmware version & assign to Firmware
 				createAndReferenceFirmwareVersion(controller, createdFirmwareMoId, extFwVersionEntry.Name, extFwVersionEntry.Version, extFwVersionEntry.Key, true)
 			} else {
+				slog.Info("Firmware is already existing, adding version to it", "firmwareName", extFwVersionEntry.Name, "firmwareVersion", extFwVersionEntry.Version)
 				// firmware is already existing, add version object
 				createAndReferenceFirmwareVersion(controller, existingFirmware.MoId, extFwVersionEntry.Name, extFwVersionEntry.Version, extFwVersionEntry.Key, true)
 			}
