@@ -82,7 +82,7 @@ func NewFirmwareVersion(name string, version string, url string, provider string
 	}
 }
 
-func (c *FirmwareTenantController) ExternalStorageIndexChanged(extFwVersionEntries []ExtFirmwareVersionEntry, extFwInfoEntries map[string]ExtFirmwareInfoEntry) {
+func (c *FirmwareTenantController) ExternalStorageIndexChanged(extFwVersionEntries []ExtFirmwareVersionEntry, extFwInfoEntries map[string]ExtFirmwareInfoEntry, enforceSync bool) {
 	c.rebuildTenantStore()
 	syncExtFwVersionEntriesWithCumulocity(c, extFwVersionEntries, extFwInfoEntries)
 	syncCumulocityWithextFwVersionEntries(c, extFwVersionEntries)

@@ -53,10 +53,10 @@ func (c *FirmwareTenantControllers) AutoObserve(intervalSecs int) {
 }
 
 func (c *FirmwareTenantControllers) SyncAllRegisteredTenantsWithIndexFiles() {
-	c.SyncTenantsWithIndexFiles(slices.Collect(maps.Keys(c.tenantControllers)))
+	c.SyncTenantsWithIndexFiles(slices.Collect(maps.Keys(c.tenantControllers)), false)
 }
 
-func (c *FirmwareTenantControllers) SyncTenantsWithIndexFiles(tenantIds []string) {
+func (c *FirmwareTenantControllers) SyncTenantsWithIndexFiles(tenantIds []string, enforceSync bool) {
 	contentFwVersionFile := c.ReadExtFileContentsAsString("c8y-firmware-versions.json")
 	if len(contentFwVersionFile) == 0 {
 		slog.Error("Firmware Version Info file (c8y-firmware-versions.json) could not be read or is empty. Service stops syncing attempt.")
@@ -69,8 +69,8 @@ func (c *FirmwareTenantControllers) SyncTenantsWithIndexFiles(tenantIds []string
 	}
 	inputHash := GetMD5Hash(contentFwVersionFile) + GetMD5Hash(contentFwVersionFile)
 
-	if inputHash == c.lastKnownInputHash {
-		slog.Info("No change in input files, nothing to do here.", "inputHash", inputHash, "lastKnownHash", c.lastKnownInputHash)
+	if inputHash == c.lastKnownInputHash && !enforceSync {
+		slog.Info("No change in input files, nothing to do here.", "inputHash", inputHash, "lastKnownHash", c.lastKnownInputHash, "enforceSync", enforceSync)
 		return
 	}
 
@@ -85,7 +85,7 @@ func (c *FirmwareTenantControllers) SyncTenantsWithIndexFiles(tenantIds []string
 			slog.Warn("No Firmware Controller found for Tenant. Skipping this tenant.", "tenantId", e)
 			continue
 		}
-		val.ExternalStorageIndexChanged(fwVersionEntries, fwInfoEntries)
+		val.ExternalStorageIndexChanged(fwVersionEntries, fwInfoEntries, enforceSync)
 	}
 	c.lastKnownInputHash = inputHash
 }

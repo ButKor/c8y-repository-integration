@@ -108,8 +108,13 @@ func syncSubscriptionsWithTenantControllers(c *c8y.Client, estClient *est.Extern
 		currentTenant, _, err := c.Tenant.GetCurrentTenant(c.Context.ServiceUserContext(tenant, false))
 		if err != nil {
 			slog.Warn("Error while invoking /tenant/currentTenant. Skipping this tenant subscription", "err", err, "tenant", tenant)
+			continue
 		}
 		domainName := currentTenant.DomainName
+		if len(domainName) == 0 {
+			slog.Warn("Domain name is empty for tenant. Skipping this tenant subscription", "tenant", tenant)
+			continue
+		}
 		// firmware controller for tenant does not exist, create and register it
 		fc := FirmwareTenantController{
 			tenantStore: &FirmwareTenantStore{
@@ -123,7 +128,7 @@ func syncSubscriptionsWithTenantControllers(c *c8y.Client, estClient *est.Extern
 			serviceBaseUrl: "https://" + domainName + "/service/" + ctxPath,
 		}
 		fwControllers.Register(fc)
-		fwControllers.SyncTenantsWithIndexFiles([]string{tenant})
+		fwControllers.SyncTenantsWithIndexFiles([]string{tenant}, true)
 	}
 }
 
