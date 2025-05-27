@@ -58,7 +58,7 @@ c8y-devmgmt-repo-intgr | fwStorageProvider | "awsS3" or "azblob" | Supported val
 c8y-devmgmt-repo-intgr | credentials.fwAwsS3ConnectionDetails | '{"region": "\<aws region\>", "secretAccessKey": "\<aws access secret\>", "accessKeyID": "\<aws access key\>", "bucketName": "\<bucket name\>" }' | Mandatory if fwStorageProvider = `awsS3`. Value is a stringified JSON. |
 c8y-devmgmt-repo-intgr | credentials.fwAzblobConnectionDetails | '{"connectionString": "\<Connection string of your azure storage container\>", "containerName": "\<container name\>" }' | Mandatory if fwStorageProvider = `azblob`. Value is a stringified JSON. |
 c8y-devmgmt-repo-intgr | fwStorageObserveIntervalMins | "5" | The interval in minutes in which the files from external storage are read. Default is 5. Datatype String. |
-c8y-devmgmt-repo-intgr | credentials.fwAzblobConnectionDetails | "180" | The amount of minutes for how long the presigned URLs are valid. Default is 180. Datatype String. |
+c8y-devmgmt-repo-intgr | fwUrlExpirationMins | "180" | The amount of minutes for how long the presigned URLs are valid. Default is 180. Datatype String. |
 
 > Configuration Options are loaded on start-up, not during runtime.
 
